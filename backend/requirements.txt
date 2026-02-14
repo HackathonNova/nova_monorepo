@@ -3,5 +3,9 @@ uvicorn
 websockets
 scikit-learn
 numpy
+pandas
+joblib
+matplotlib
+seaborn
 pydantic
 pytest
