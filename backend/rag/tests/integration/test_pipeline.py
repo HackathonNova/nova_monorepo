@@ -1,4 +1,5 @@
 from rag.config import get_settings
+from rag.generation import HFInferenceClient
 from rag.pipelines import RAGPipeline
 
 
@@ -8,6 +9,7 @@ def test_pipeline_ingest_and_answer(tmp_path, monkeypatch):
 
     monkeypatch.setenv("HF_API_TOKEN", "test-token")
     monkeypatch.setenv("HF_MODEL_ID", "test-model")
+    monkeypatch.setattr(HFInferenceClient, "generate", lambda self, prompt, contexts: "stub answer")
 
     settings = get_settings()
     pipeline = RAGPipeline(settings)

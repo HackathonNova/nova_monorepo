@@ -37,7 +37,7 @@ def get_settings(env_file: Optional[str] = None) -> Settings:
     if env_file:
         load_env_file(Path(env_file))
 
-    hf_api_base = os.getenv("HF_API_BASE", "https://api-inference.huggingface.co")
+    hf_api_base = os.getenv("HF_API_BASE", "https://router.huggingface.co")
     hf_api_token = os.getenv("HF_API_TOKEN", "")
     hf_model_id = os.getenv("HF_MODEL_ID", "")
     hf_task = os.getenv("HF_TASK", "text-generation")

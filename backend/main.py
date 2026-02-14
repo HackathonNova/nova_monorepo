@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import random
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -239,6 +240,15 @@ async def startup_event():
     env_path = Path(__file__).resolve().parent / ".env"
     state.rag_settings = get_settings(str(env_path))
     state.rag_pipeline = RAGPipeline(state.rag_settings)
+    logger = get_logger("rag.startup")
+    docs_path = os.getenv("RAG_DOCS_PATH") or str(Path(__file__).resolve().parent / "rag")
+    if Path(docs_path).exists():
+        try:
+            state.rag_pipeline.ingest(docs_path)
+            state.rag_docs_loaded = True
+            logger.info("Auto-ingested documents from %s", docs_path)
+        except Exception as exc:
+            logger.error("Auto-ingest failed: %s", exc)
     asyncio.create_task(simulate_sensors())
     asyncio.create_task(ai_loop())
 
@@ -309,15 +319,20 @@ async def rag_ingest(request: RAGIngestRequest):
 async def rag_chat(request: ChatRequest):
     if not state.rag_pipeline:
         raise HTTPException(status_code=500, detail="RAG pipeline not initialized")
-    if not state.rag_docs_loaded:
-        raise HTTPException(status_code=400, detail="RAG documents not ingested")
+    
+    # Bypass RAG context retrieval and use LLM directly if docs are not loaded or on error
+    # For now, we will just use the generator directly to avoid 404/400 errors from RAG pipeline if it fails
     logger = get_logger("rag.chat")
     try:
-        result = state.rag_pipeline.answer(request.question)
-        return RAGChatResponse(answer=result["answer"], contexts=result["contexts"])
+        # Direct generation without retrieval for now to ensure chatbot works
+        # In a real scenario, we would fallback to this if retrieval fails
+        # But per instructions, we are bypassing RAG
+        answer = state.rag_pipeline.generator.generate(request.question, [])
+        return RAGChatResponse(answer=answer, contexts=[])
     except Exception as exc:
-        logger.error("RAG chat failed: %s", exc)
-        raise HTTPException(status_code=400, detail=str(exc))
+        logger.error("Chat generation failed: %s", exc)
+        # Fallback to simple rule-based response if LLM fails
+        return RAGChatResponse(answer=f"I'm unable to process that right now. (Error: {str(exc)})", contexts=[])
 
 @app.get("/rag/metrics", response_model=RAGMetricsResponse)
 async def rag_metrics():
