@@ -28,7 +28,7 @@ class HFInferenceClient:
                 "return_full_text": False
             }
         }
-        url = f"{self.settings.hf_api_base}/hf-inference/models/{self.settings.hf_model_id}"
+        url = f"{self.settings.hf_api_base}/models/{self.settings.hf_model_id}"
         request = urllib.request.Request(
             url,
             data=json.dumps(payload).encode("utf-8"),
