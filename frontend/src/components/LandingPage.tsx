@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import '@google/model-viewer';
 import {
   Activity,
   BarChart3,
@@ -42,6 +43,7 @@ export const LandingPage: React.FC<Props> = ({ onEnter }) => {
 
       <main className="relative z-10">
         <Hero onEnter={onEnter} />
+        <ReactorShowcase />
         <Capabilities />
 
         <div className="w-full bg-surface-dark border-y border-border-dim py-4 overflow-hidden">
@@ -151,25 +153,102 @@ const Hero: React.FC<{ onEnter: () => void }> = ({ onEnter }) => {
         </div>
 
         <div className="relative flex justify-center items-center h-[500px]">
-          <div className="absolute w-[300px] h-[300px] border border-primary/20 rounded-full animate-spin-slow"></div>
-          <div className="absolute w-[400px] h-[400px] border border-secondary/20 rounded-full animate-[spin_20s_linear_infinite_reverse]"></div>
-
-          <div className="relative z-10 w-[240px] h-[240px] bg-bg-dark border border-primary flex items-center justify-center technical-border shadow-[0_0_50px_rgba(0,240,255,0.1)]">
-            <div className="text-center">
-              <Zap className="w-12 h-12 text-primary mx-auto mb-2 animate-pulse" />
-              <div className="text-primary font-bold text-sm tracking-widest">FORGE_CORE</div>
-              <div className="text-white/40 text-[10px] mt-1">v4.2.1-STABLE</div>
-            </div>
-
-            <div className="absolute -top-10 -left-10 w-20 h-20 border-t border-l border-primary/30"></div>
-            <div className="absolute -bottom-10 -right-10 w-20 h-20 border-b border-r border-primary/30"></div>
+          <div className="absolute w-[500px] h-[500px] bg-primary/5 rounded-full blur-3xl animate-pulse"></div>
+          <div className="relative z-10 w-full h-full">
+            <model-viewer
+              src="/models/untitled.glb"
+              poster="/models/Gemini_Generated_Image_ob961lob961lob96.png"
+              alt="Forge Core Reactor"
+              camera-controls
+              auto-rotate
+              shadow-intensity="1"
+              exposure="0.8"
+              loading="eager"
+              style={{ width: '100%', height: '100%', '--poster-color': 'transparent' } as React.CSSProperties}
+            >
+              <div slot="progress-bar"></div>
+            </model-viewer>
           </div>
 
-          <div className="absolute top-10 right-0 animate-bounce text-[10px] text-primary/50 font-mono">
+          <div className="absolute top-10 right-0 animate-bounce text-[10px] text-primary/50 font-mono pointer-events-none">
             [DATA_PACKET_0x44] -&gt; SYNCED
           </div>
-          <div className="absolute bottom-20 left-0 animate-pulse text-[10px] text-secondary/50 font-mono">
+          <div className="absolute bottom-20 left-0 animate-pulse text-[10px] text-secondary/50 font-mono pointer-events-none">
             [NEURAL_LINK] -&gt; STABLE
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+const ReactorShowcase: React.FC = () => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [inView, setInView] = useState(false);
+  const [modelReady, setModelReady] = useState(false);
+
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setInView(true);
+        }
+      },
+      { threshold: 0.2 }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  const showDescription = inView && modelReady;
+
+  return (
+    <section className="py-24 px-4">
+      <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-12 items-center">
+        <div ref={containerRef} className={`relative fade-in-up ${inView ? 'is-visible' : ''}`}>
+          <div className="absolute -inset-6 bg-primary/10 blur-3xl opacity-30"></div>
+          <div className="relative bg-slate-900/40 border border-white/10 rounded-2xl overflow-hidden glass-blur">
+            <model-viewer
+              src="/models/untitled.glb"
+              poster="/models/Gemini_Generated_Image_ob961lob961lob96.png"
+              alt="Limpet reactor assembly"
+              camera-controls
+              auto-rotate
+              interaction-prompt="auto"
+              shadow-intensity="1"
+              exposure="0.85"
+              loading="eager"
+              onLoad={() => setModelReady(true)}
+              style={{ width: '100%', height: '520px', '--poster-color': 'transparent' } as React.CSSProperties}
+            >
+              <div slot="progress-bar"></div>
+            </model-viewer>
+          </div>
+          <div className="mt-4 text-[10px] font-mono uppercase tracking-[0.3em] text-primary/60">
+            Reactor Twin: Untitled Core
+          </div>
+        </div>
+
+        <div className={`fade-in-up ${showDescription ? 'is-visible' : ''}`} style={{ transitionDelay: '200ms' }}>
+          <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-primary/60 mb-4">Project Overview</div>
+          <h2 className="text-4xl md:text-5xl font-bold tracking-tighter text-white leading-tight mb-6">
+            Limpet Reactor Digital Twin
+          </h2>
+          <p className="text-white/60 text-sm md:text-base leading-relaxed mb-6">
+            A high-fidelity simulation stack that fuses live telemetry, predictive control, and safety envelopes into a single operational
+            surface. The twin provides continuous visibility into thermal stability, flow efficiency, and structural health.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm text-white/70">
+            <div className="p-4 bg-white/5 border border-white/10 rounded-xl">
+              <div className="text-primary font-bold text-xs uppercase tracking-widest mb-2">Purpose</div>
+              Accelerate analysis, rehearse operational scenarios, and reduce downtime with real-time insight.
+            </div>
+            <div className="p-4 bg-white/5 border border-white/10 rounded-xl">
+              <div className="text-primary font-bold text-xs uppercase tracking-widest mb-2">Benefits</div>
+              Predict anomalies earlier, validate interventions, and coordinate teams around a shared visual context.
+            </div>
           </div>
         </div>
       </div>

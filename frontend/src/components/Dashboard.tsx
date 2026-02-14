@@ -1,620 +1,438 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useState, useRef } from 'react';
 import '@google/model-viewer';
-import { useDashboardStore } from '../store';
-import type { Anomaly } from '../store';
+import {
+  Activity,
+  Bot,
+  Box,
+  ChevronRight,
+  Cpu,
+  Gauge,
+  Info,
+  Layers,
+  LayoutDashboard,
+  MessageSquare,
+  Search,
+  Settings,
+  Terminal,
+  Wifi
+} from 'lucide-react';
 
-const LOG_LEVELS = {
-  INFO: 'INFO',
-  SUCCESS: 'SUCCESS',
-  ALERT: 'ALERT',
-  AI_SYS: 'AI_SYS',
-  WARN: 'WARN'
-} as const;
+/* -------------------------------------------------------------------------- */
+/*                                    TYPES                                   */
+/* -------------------------------------------------------------------------- */
 
-type LogLevel = (typeof LOG_LEVELS)[keyof typeof LOG_LEVELS];
+type ViewMode = 'main' | 'chatbot' | 'esp';
 
-interface LogEntry {
-  timestamp: string;
-  level: LogLevel;
-  message: string;
-}
-
-interface Metric {
+interface HotspotData {
+  name: string;
+  position: string;
+  normal: string;
   label: string;
-  value: string;
-  unit: string;
-  status?: 'OK' | 'HI' | 'LOW';
-  progress: number;
+  description: string;
 }
 
-const ranges: Record<string, { min: number; max: number }> = {
-  temperature: { min: 350, max: 380 },
-  pressure: { min: 2.0, max: 2.4 },
-  ph: { min: 6.8, max: 7.2 },
-  flowRate: { min: 120, max: 150 },
-  vibration: { min: 0, max: 10 }
-};
+const HOTSPOTS: HotspotData[] = [
+  {
+    name: 'hotspot-core',
+    position: '0 1 0',
+    normal: '0 1 0',
+    label: 'Reactor Core',
+    description: 'Primary fusion chamber operating at 98% efficiency. Thermal shielding active.'
+  },
+  {
+    name: 'hotspot-valve',
+    position: '0.5 0.5 0.5',
+    normal: '1 0 0',
+    label: 'Flow Valve A',
+    description: 'Regulates coolant distribution. Currently open at 45% capacity.'
+  },
+  {
+    name: 'hotspot-turbine',
+    position: '-0.5 0.2 -0.5',
+    normal: '0 0 1',
+    label: 'Turbine Array',
+    description: 'Generates 1.2GW of power. Vibration levels nominal.'
+  }
+];
 
-const isAnomaly = (value: unknown): value is Anomaly => {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as Anomaly;
-  return typeof candidate.timestamp === 'number' && typeof candidate.zone === 'string' && typeof candidate.severity === 'number';
-};
+/* -------------------------------------------------------------------------- */
+/*                               MAIN DASHBOARD                               */
+/* -------------------------------------------------------------------------- */
 
 export const Dashboard: React.FC = () => {
-  const sensors = useDashboardStore((state) => state.sensors);
-  const anomalies = useDashboardStore((state) => state.anomalies);
-  const twinState = useDashboardStore((state) => state.twinState);
-  const setSensors = useDashboardStore((state) => state.setSensors);
-  const setTwinState = useDashboardStore((state) => state.setTwinState);
-  const addAnomaly = useDashboardStore((state) => state.addAnomaly);
-  const [isConnected, setIsConnected] = useState(false);
-  const [activeView, setActiveView] = useState<'monitoring' | 'insights'>('monitoring');
-  const seenAnomalies = useRef<Set<number>>(new Set());
-
-  useEffect(() => {
-    let ws: WebSocket;
-    let reconnectTimer: ReturnType<typeof setTimeout>;
-
-    const connect = () => {
-      ws = new WebSocket('ws://localhost:8000/ws');
-
-      ws.onopen = () => {
-        setIsConnected(true);
-      };
-
-      ws.onclose = () => {
-        setIsConnected(false);
-        reconnectTimer = setTimeout(connect, 2000);
-      };
-
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-
-        if (data.type === 'init' || data.type === 'sensor_update') {
-          if (data.payload) setSensors(data.payload);
-          if (data.twin_state) setTwinState(data.twin_state);
-          if (Array.isArray(data.anomalies) && data.anomalies.length > 0) {
-            data.anomalies.forEach((anomaly: unknown) => {
-              if (!isAnomaly(anomaly)) return;
-              if (!seenAnomalies.current.has(anomaly.timestamp)) {
-                seenAnomalies.current.add(anomaly.timestamp);
-                addAnomaly(anomaly);
-                if (seenAnomalies.current.size > 100) {
-                  const [first] = seenAnomalies.current;
-                  seenAnomalies.current.delete(first);
-                }
-              }
-            });
-          }
-        }
-      };
-    };
-
-    connect();
-
-    return () => {
-      ws?.close();
-      clearTimeout(reconnectTimer);
-    };
-  }, [addAnomaly, setSensors, setTwinState]);
-
-  const sensorMap = useMemo(() => {
-    return new Map(sensors.map((sensor) => [sensor.id, sensor]));
-  }, [sensors]);
-
-  const buildMetric = useCallback((id: string, label: string, unit: string): Metric => {
-    const sensor = sensorMap.get(id);
-    if (!sensor) {
-      return { label, value: '—', unit, progress: 0 };
-    }
-    const range = ranges[id] || { min: 0, max: 1 };
-    const normalized = Math.min(1, Math.max(0, (sensor.value - range.min) / (range.max - range.min)));
-    const status = sensor.status === 'critical' ? 'HI' : sensor.status === 'warning' ? 'LOW' : 'OK';
-    return {
-      label,
-      value: sensor.value.toFixed(2),
-      unit,
-      status,
-      progress: Math.round(normalized * 100)
-    };
-  }, [sensorMap]);
-
-  const mainMetrics = useMemo(() => {
-    return {
-      core: [
-        buildMetric('temperature', 'Temp', '°C'),
-        buildMetric('pressure', 'Pressure', 'MPa')
-      ],
-      flow: [
-        buildMetric('flowRate', 'Flow', 'm³/h'),
-        buildMetric('ph', 'pH', '')
-      ],
-      logs: [
-        buildMetric('vibration', 'Vibe', 'mm/s'),
-        buildMetric('temperature', 'Core Δ', '°C')
-      ]
-    };
-  }, [buildMetric]);
+  const [activeView, setActiveView] = useState<ViewMode>('main');
 
   return (
-    <div className="flex h-screen w-screen bg-background relative overflow-hidden crt-overlay">
-      <div className="fixed inset-0 bg-grid-pattern bg-[length:40px_40px] pointer-events-none z-0 opacity-40"></div>
+    <div className="flex h-screen w-screen bg-[#050505] relative overflow-hidden text-slate-200 font-sans selection:bg-primary/30">
+      {/* Background FX */}
+      <div className="fixed inset-0 bg-grid-pattern bg-[length:40px_40px] pointer-events-none z-0 opacity-20"></div>
       <div className="scanline"></div>
 
-      <Sidebar activeView={activeView} onChange={setActiveView} />
+      {/* Sidebar Navigation */}
+      <Sidebar activeView={activeView} onViewChange={setActiveView} />
 
-      <main className="flex-1 flex flex-col p-2 gap-2 relative z-10 overflow-hidden">
-        <Header isConnected={isConnected} />
-
-        <div className="flex-1 flex flex-col gap-2 overflow-hidden">
-          {activeView === 'monitoring' ? (
-            <>
-              <MainGrid
-                coreStatus={twinState.core}
-                coreMetrics={mainMetrics.core}
-                flowMetrics={mainMetrics.flow}
-                logMetrics={mainMetrics.logs}
-              />
-              <ConsoleLogs anomalies={anomalies} />
-            </>
-          ) : (
-            <InsightsView />
-          )}
+      {/* Main Content Area */}
+      <main className="flex-1 relative z-10 overflow-hidden flex flex-col">
+        <Header activeView={activeView} />
+        
+        <div className="flex-1 relative overflow-hidden">
+          {activeView === 'main' && <Main3DView />}
+          {activeView === 'chatbot' && <ChatbotView />}
+          {activeView === 'esp' && <EspView />}
         </div>
       </main>
-
-      <FloatingAI />
     </div>
   );
 };
 
-const Sidebar: React.FC<{ activeView: 'monitoring' | 'insights'; onChange: (view: 'monitoring' | 'insights') => void }> = ({
-  activeView,
-  onChange
-}) => {
-  const navItems: { icon: string; label: string; view: 'monitoring' | 'insights' }[] = [
-    { icon: 'monitoring', label: 'Monitoring', view: 'monitoring' },
-    { icon: 'insights', label: 'Insights', view: 'insights' }
-  ];
+/* -------------------------------------------------------------------------- */
+/*                                 COMPONENTS                                 */
+/* -------------------------------------------------------------------------- */
+
+const Sidebar: React.FC<{ activeView: ViewMode; onViewChange: (v: ViewMode) => void }> = ({ activeView, onViewChange }) => {
+  const navItems = [
+    { id: 'main', icon: <LayoutDashboard size={20} />, label: 'Overview' },
+    { id: 'chatbot', icon: <MessageSquare size={20} />, label: 'AI Assistant' },
+    { id: 'esp', icon: <Wifi size={20} />, label: 'ESP Telemetry' },
+  ] as const;
 
   return (
-    <aside className="w-16 h-[calc(100vh-1rem)] m-2 bg-slate-900/40 border border-white/10 rounded-xl flex flex-col items-center py-6 gap-8 glass-blur z-20">
-      <div className="w-10 h-10 rounded-lg bg-primary/20 border border-primary/50 flex items-center justify-center text-primary shadow-[0_0_15px_rgba(14,165,233,0.3)]">
-        <span className="material-symbols-outlined text-[24px]">hub</span>
+    <aside className="w-16 md:w-20 border-r border-white/5 bg-slate-900/50 backdrop-blur-md flex flex-col items-center py-6 gap-6 z-20">
+      <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/40 flex items-center justify-center text-primary mb-2 shadow-[0_0_15px_rgba(0,240,255,0.15)]">
+        <Cpu size={24} />
       </div>
 
-      <nav className="flex flex-col gap-4 w-full px-2">
-        {navItems.map((item, idx) => (
+      <nav className="flex flex-col gap-2 w-full px-2">
+        {navItems.map((item) => (
           <button
-            key={idx}
-            onClick={() => onChange(item.view)}
-            className={`w-full aspect-square rounded-lg flex items-center justify-center transition-all group relative ${
-              activeView === item.view
-                ? 'bg-primary/10 text-primary border border-primary/40'
+            key={item.id}
+            onClick={() => onViewChange(item.id)}
+            className={`w-full aspect-square rounded-xl flex items-center justify-center transition-all duration-300 group relative ${
+              activeView === item.id
+                ? 'bg-primary text-black shadow-[0_0_20px_rgba(0,240,255,0.3)]'
                 : 'text-slate-500 hover:text-white hover:bg-white/5'
             }`}
           >
-            <span className="material-symbols-outlined text-[22px] font-light">{item.icon}</span>
-            {activeView === item.view && (
-              <div className="absolute -right-2 top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-full"></div>
-            )}
-            <span className="absolute left-full ml-4 px-2 py-1 bg-slate-800 border border-white/10 text-[10px] text-white rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none uppercase tracking-widest font-mono">
+            {item.icon}
+            <span className="absolute left-full ml-4 px-2 py-1 bg-slate-800 border border-white/10 text-[10px] text-white rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none uppercase tracking-widest font-mono shadow-xl translate-x-2 group-hover:translate-x-0">
               {item.label}
             </span>
           </button>
         ))}
       </nav>
 
-      <div className="mt-auto flex flex-col gap-4 w-full px-2">
-        <button className="w-full aspect-square rounded-lg flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/5 transition-all">
-          <span className="material-symbols-outlined text-[22px] font-light">settings</span>
+      <div className="mt-auto flex flex-col gap-4">
+        <button className="w-10 h-10 rounded-lg flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/5 transition-all">
+          <Settings size={20} />
         </button>
-        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-primary to-accent p-[2px] cursor-pointer hover:scale-105 transition-transform">
-          <img
-            src="https://picsum.photos/100/100?random=1"
-            alt="Profile"
-            className="w-full h-full rounded-full object-cover grayscale"
-          />
+        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary to-secondary p-[1px]">
+          <div className="w-full h-full rounded-full bg-black/50 backdrop-blur flex items-center justify-center text-[10px] font-bold">
+            AD
+          </div>
         </div>
       </div>
     </aside>
   );
 };
 
-const Header: React.FC<{ isConnected: boolean }> = ({ isConnected }) => {
-  const [time, setTime] = useState(new Date());
-
-  useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' UTC';
+const Header: React.FC<{ activeView: ViewMode }> = ({ activeView }) => {
+  const titles = {
+    main: 'Main Reactor Overview',
+    chatbot: 'Tactical AI Assistant',
+    esp: 'ESP-32 Telemetry Stream'
   };
 
   return (
-    <header className="h-14 bg-slate-900/40 border border-white/10 rounded-xl px-4 flex items-center justify-between glass-blur">
-      <div className="flex items-center gap-6">
-        <div className="flex items-center gap-2 font-mono text-[10px] tracking-wider text-primary">
-          <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-success' : 'bg-danger'} animate-pulse shadow-[0_0_8px_rgba(14,165,233,0.5)]`}></span>
-          SCADA.NET_V4.2
-        </div>
-        <div className="w-[1px] h-4 bg-white/10"></div>
-        <h1 className="text-white font-medium text-sm tracking-tight">Unit 04 Operations</h1>
+    <header className="h-16 border-b border-white/5 bg-slate-900/30 backdrop-blur-sm px-6 flex items-center justify-between">
+      <div className="flex items-center gap-4">
+        <h1 className="text-sm font-bold uppercase tracking-[0.2em] text-white flex items-center gap-3">
+          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-[0_0_10px_rgba(0,240,255,0.5)]"></span>
+          {titles[activeView]}
+        </h1>
+        <div className="h-4 w-px bg-white/10"></div>
+        <div className="text-[10px] font-mono text-slate-500">SYS_V4.2.1</div>
       </div>
 
-      <div className="flex-1 max-w-xl mx-8 relative">
-        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-[18px]">terminal</span>
-        <input
-          type="text"
-          placeholder="Type command or search parameters..."
-          className="w-full bg-black/40 border border-white/5 rounded-md pl-12 pr-12 py-1.5 text-xs font-mono text-slate-300 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all"
-        />
-        <div className="absolute right-3 top-1/2 -translate-y-1/2">
-          <kbd className="bg-slate-800 border border-white/10 px-1.5 py-0.5 rounded text-[9px] font-mono text-slate-500">⌘K</kbd>
+      <div className="flex items-center gap-4">
+        <div className="hidden md:flex items-center bg-black/20 border border-white/5 rounded-lg px-3 py-1.5 gap-2">
+          <Search size={14} className="text-slate-500" />
+          <input 
+            type="text" 
+            placeholder="Search commands..." 
+            className="bg-transparent border-none outline-none text-[10px] font-mono text-slate-300 w-48 placeholder:text-slate-600"
+          />
+          <kbd className="text-[9px] font-mono text-slate-600 border border-white/5 px-1 rounded">CTRL+K</kbd>
         </div>
-      </div>
-
-      <div className="flex items-center gap-6">
-        <div className="flex flex-col items-end leading-none font-mono">
-          <span className="text-xs text-slate-200 tracking-wider">{formatTime(time)}</span>
-          <span className="text-[9px] text-primary/70 uppercase font-bold mt-0.5 tracking-widest">
-            {isConnected ? 'System Nominal' : 'System Offline'}
-          </span>
+        <div className="flex items-center gap-2 text-[10px] font-mono text-slate-400">
+          <span className="text-success">● ONLINE</span>
+          <span>14ms</span>
         </div>
-        <button className="relative p-1.5 text-slate-400 hover:text-white transition-colors border border-transparent hover:border-white/5 rounded">
-          <span className="material-symbols-outlined text-[22px]">notifications</span>
-          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-primary rounded-full"></span>
-        </button>
       </div>
     </header>
   );
 };
 
-const InsightsView: React.FC = () => {
-  const stats = [
-    { label: 'ESP-01 TEMP', value: '—', unit: '°C' },
-    { label: 'ESP-02 PRESS', value: '—', unit: 'kPa' },
-    { label: 'ESP-03 FLOW', value: '—', unit: 'L/min' },
-    { label: 'ESP-04 VIBE', value: '—', unit: 'mm/s' }
-  ];
-  const insights = [
-    { title: 'Thermal Stability', value: 'Pending', status: 'Awaiting data' },
-    { title: 'Pressure Drift', value: 'Pending', status: 'Awaiting data' },
-    { title: 'Flow Efficiency', value: 'Pending', status: 'Awaiting data' },
-    { title: 'Vibration Risk', value: 'Pending', status: 'Awaiting data' }
-  ];
+const Main3DView: React.FC = () => {
+  const [selectedHotspot, setSelectedHotspot] = useState<string | null>(null);
+  const modelViewerRef = useRef<HTMLElement>(null);
 
-  return (
-    <div className="flex-1 flex flex-col gap-2 overflow-hidden">
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
-        {stats.map((stat) => (
-          <div key={stat.label} className="bg-slate-900/50 border border-white/10 rounded-xl p-4 glass-blur">
-            <div className="text-[10px] font-mono uppercase tracking-widest text-slate-400">{stat.label}</div>
-            <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-mono text-white">{stat.value}</span>
-              <span className="text-[11px] text-slate-500">{stat.unit}</span>
-            </div>
-            <div className="mt-2 h-1 bg-white/5 rounded-full overflow-hidden">
-              <div className="h-full bg-primary/40 w-1/3"></div>
-            </div>
-          </div>
-        ))}
-      </div>
+  const handleHotspotClick = (hs: HotspotData) => {
+    const isSelected = selectedHotspot === hs.name;
+    setSelectedHotspot(isSelected ? null : hs.name);
 
-      <div className="flex-1 grid grid-cols-1 xl:grid-cols-[2fr,1fr] gap-2 overflow-hidden">
-        <div className="bg-slate-900/40 border border-white/10 rounded-xl p-4 glass-blur flex flex-col">
-          <div className="flex items-center justify-between">
-            <div className="text-[11px] font-mono uppercase tracking-widest text-slate-400">Model Execution</div>
-            <button className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest bg-primary/10 text-primary border border-primary/30 rounded-md hover:bg-primary/20 transition-colors">
-              Run Model
-            </button>
-          </div>
-          <div className="mt-4 flex-1 rounded-lg border border-white/5 bg-black/30 flex items-center justify-center">
-            <div className="text-center">
-              <div className="text-sm text-white/70 font-mono">Awaiting Model Integration</div>
-              <div className="text-[10px] text-slate-500 mt-1">Upload dataset or stream ESP telemetry to start.</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-slate-900/40 border border-white/10 rounded-xl p-4 glass-blur flex flex-col gap-3">
-          <div className="text-[11px] font-mono uppercase tracking-widest text-slate-400">Insights Queue</div>
-          <div className="flex-1 flex flex-col gap-2 overflow-y-auto custom-scrollbar pr-1">
-            {insights.map((item) => (
-              <div key={item.title} className="border border-white/10 rounded-lg p-3 bg-black/30">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-white">{item.title}</span>
-                  <span className="text-[9px] uppercase tracking-widest text-slate-500 font-mono">{item.value}</span>
-                </div>
-                <div className="mt-2 text-[10px] text-slate-500">{item.status}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const MainGrid: React.FC<{
-  coreStatus: 'normal' | 'critical';
-  coreMetrics: Metric[];
-  flowMetrics: Metric[];
-  logMetrics: Metric[];
-}> = ({ coreStatus, coreMetrics, flowMetrics, logMetrics }) => {
-  return (
-    <div className="flex-[3] flex gap-2 overflow-hidden min-h-0">
-      <Panel
-        title="RCT-01 // CORE"
-        status={coreStatus === 'critical' ? 'CRITICAL' : 'NORMAL'}
-        icon="warning"
-        accent={coreStatus === 'critical' ? 'danger' : 'primary'}
-        image="https://picsum.photos/seed/reactor/800/1200"
-        modelSrc="/models/untitled.glb"
-        showOverlay={true}
-        metrics={coreMetrics}
-      />
-      <Panel
-        title="DIST-02 // FLOW"
-        status="NORMAL"
-        icon="water"
-        accent="primary"
-        image="https://picsum.photos/seed/pipes/800/1200"
-        grayscale={true}
-        metrics={flowMetrics}
-      />
-      <Panel
-        title="STR-09 // LOGS"
-        status="CAPACITY"
-        icon="inventory_2"
-        accent="warning"
-        image="https://picsum.photos/seed/warehouse/800/1200"
-        showGrid={true}
-        metrics={logMetrics}
-      />
-    </div>
-  );
-};
-
-const Panel: React.FC<{
-  title: string;
-  status: string;
-  icon: string;
-  accent: 'primary' | 'warning' | 'danger';
-  image: string;
-  modelSrc?: string;
-  metrics: Metric[];
-  grayscale?: boolean;
-  showOverlay?: boolean;
-  showGrid?: boolean;
-}> = ({ title, status, icon, accent, image, modelSrc, metrics, grayscale, showOverlay, showGrid }) => {
-  const [modelError, setModelError] = useState(false);
-
-  return (
-    <div className="flex-1 bg-slate-900/40 border border-white/10 rounded-xl flex flex-col overflow-hidden glass-blur group hover:border-white/20 transition-all duration-300">
-      <div className="h-9 bg-black/40 border-b border-white/10 flex items-center justify-between px-3">
-        <div className="flex items-center gap-2">
-          <span
-            className={`material-symbols-outlined text-[16px] ${
-              accent === 'danger' ? 'text-danger animate-pulse' : accent === 'warning' ? 'text-warning' : 'text-slate-400'
-            }`}
-          >
-            {icon}
-          </span>
-          <span className="text-[10px] font-bold text-slate-200 tracking-widest font-mono uppercase">{title}</span>
-        </div>
-        <span
-          className={`text-[9px] font-mono uppercase tracking-widest ${
-            accent === 'danger' ? 'text-danger' : accent === 'warning' ? 'text-warning' : 'text-primary'
-          }`}
-        >
-          {status}
-        </span>
-      </div>
-      <div className="flex-1 relative overflow-hidden bg-black/20">
-        {modelSrc && !modelError ? (
-          <model-viewer
-            src={modelSrc}
-            poster={image}
-            alt={`3D Model of ${title}`}
-            camera-controls
-            auto-rotate
-            shadow-intensity="1"
-            exposure="0.7"
-            loading="eager"
-            style={{ width: '100%', height: '100%', '--poster-color': 'transparent' } as React.CSSProperties}
-            onError={() => setModelError(true)}
-          >
-            {/* Fallback content within model-viewer if needed, though poster handles loading */}
-            <div slot="progress-bar"></div>
-          </model-viewer>
-        ) : (
-          <img
-            src={image}
-            alt={title}
-            className={`w-full h-full object-cover opacity-60 mix-blend-screen ${grayscale ? 'grayscale' : ''}`}
-          />
-        )}
-        {showOverlay && <div className="absolute inset-0 bg-danger/10 animate-pulse pointer-events-none"></div>}
-        {showGrid && <div className="absolute inset-0 grid-lines opacity-40 pointer-events-none"></div>}
-      </div>
-      <div className="p-3 bg-black/40 border-t border-white/5 grid grid-cols-2 gap-3">
-        {metrics.map((metric, idx) => (
-          <div key={idx} className="bg-white/5 border border-white/5 rounded p-2 flex flex-col gap-1">
-            <div className="flex justify-between items-center">
-              <span className="text-[9px] font-mono text-slate-400 uppercase tracking-widest">{metric.label}</span>
-              {metric.status && (
-                <span
-                  className={`text-[8px] font-bold ${
-                    metric.status === 'HI' ? 'text-danger' : metric.status === 'LOW' ? 'text-warning' : 'text-success'
-                  }`}
-                >
-                  {metric.status}
-                </span>
-              )}
-            </div>
-            <div className="text-xl font-mono text-slate-100 flex items-baseline gap-0.5">
-              {metric.value}
-              <span className="text-[10px] text-slate-500">{metric.unit}</span>
-            </div>
-            <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-              <div className="h-full bg-primary transition-all duration-700" style={{ width: `${metric.progress}%` }}></div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const ConsoleLogs: React.FC<{ anomalies: { zone: string; severity: number; timestamp: number }[] }> = ({ anomalies }) => {
-  const baseLogs = useMemo<LogEntry[]>(
-    () => [
-      {
-        timestamp: '14:30:12.450',
-        level: LOG_LEVELS.INFO,
-        message: 'System initialization sequence complete. All modules active.'
-      },
-      {
-        timestamp: '14:30:15.102',
-        level: LOG_LEVELS.SUCCESS,
-        message: 'Connection established with Node DIST-02. Latency: 4ms.'
-      },
-      {
-        timestamp: '14:31:05.889',
-        level: LOG_LEVELS.ALERT,
-        message: 'Abnormal temperature rise detected in RCT-01 Core. Threshold exceeded by 12%.'
-      },
-      {
-        timestamp: '14:31:06.001',
-        level: LOG_LEVELS.AI_SYS,
-        message: 'Predictive model updated. Risk level raised to category 4.'
-      },
-      {
-        timestamp: '14:31:45.220',
-        level: LOG_LEVELS.WARN,
-        message: 'Storage STR-09 approaching capacity limit (80%).'
-      }
-    ],
-    []
-  );
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const logs = useMemo(() => {
-    const anomalyLogs = anomalies.map((anomaly) => ({
-      timestamp: `T-${anomaly.timestamp}`,
-      level: LOG_LEVELS.ALERT,
-      message: `Anomaly detected in ${anomaly.zone.toUpperCase()} zone. Severity ${(anomaly.severity * 100).toFixed(0)}%.`
-    }));
-    return [...baseLogs, ...anomalyLogs].slice(-20);
-  }, [anomalies, baseLogs]);
-
-  useEffect(() => {
-    if (containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
-    }
-  }, [logs]);
-
-  const getLevelStyles = (level: LogLevel) => {
-    switch (level) {
-      case LOG_LEVELS.INFO:
-        return 'text-primary';
-      case LOG_LEVELS.SUCCESS:
-        return 'text-success';
-      case LOG_LEVELS.ALERT:
-        return 'text-danger';
-      case LOG_LEVELS.AI_SYS:
-        return 'text-accent';
-      case LOG_LEVELS.WARN:
-        return 'text-warning';
+    if (!isSelected && modelViewerRef.current) {
+      // Zoom and rotate to the hotspot
+      const viewer = modelViewerRef.current as any;
+      
+      // Calculate a target orbit based on the hotspot position
+      // This is a simple approximation; for perfect framing, you might need specific orbit values per hotspot
+      // Here we maintain the current theta/phi but zoom in (reduce radius)
+      
+      // We can use the hotspot position as the target
+      viewer.cameraTarget = hs.position;
+      
+      // And zoom in by setting a closer radius (e.g., '2m')
+      // You might want to store specific orbit values in HOTSPOTS if this generic zoom isn't perfect
+      viewer.cameraOrbit = '0deg 75deg 2m'; 
+    } else if (isSelected && modelViewerRef.current) {
+      // Reset view when deselecting
+      const viewer = modelViewerRef.current as any;
+      viewer.cameraTarget = 'auto';
+      viewer.cameraOrbit = 'auto';
     }
   };
 
   return (
-    <div className="h-44 bg-slate-900/40 border border-white/10 rounded-xl flex flex-col overflow-hidden glass-blur shrink-0">
-      <div className="h-8 bg-black/40 border-b border-white/10 px-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest font-bold">System Logs</span>
-          <div className="flex gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-danger/50"></span>
-            <span className="w-1.5 h-1.5 rounded-full bg-warning/50"></span>
-            <span className="w-1.5 h-1.5 rounded-full bg-success/50"></span>
+    <div className="w-full h-full relative">
+      {/* Merged Data Overlay - Left */}
+      <div className="absolute top-6 left-6 w-64 flex flex-col gap-4 pointer-events-none z-10">
+        <DataCard title="Core Status" value="NOMINAL" accent="text-success" icon={<Activity size={16} />}>
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <Metric label="Temp" value="342°C" />
+            <Metric label="Press" value="12.4 MPa" />
           </div>
-        </div>
-        <div className="flex items-center gap-2 text-[10px] font-mono text-slate-500">
-          <span className="material-symbols-outlined text-[14px]">history</span>
-          History: 24h
-        </div>
+        </DataCard>
+        <DataCard title="Flow Rate" value="98%" accent="text-primary" icon={<Gauge size={16} />}>
+          <div className="w-full h-1 bg-white/10 rounded-full mt-3 overflow-hidden">
+            <div className="h-full bg-primary w-[98%] shadow-[0_0_10px_rgba(0,240,255,0.5)]"></div>
+          </div>
+        </DataCard>
       </div>
 
-      <div ref={containerRef} className="flex-1 p-3 overflow-y-auto font-mono text-[11px] leading-relaxed bg-black/30 custom-scrollbar">
-        {logs.map((log, i) => (
-          <div
-            key={`${log.timestamp}-${i}`}
-            className={`flex gap-4 py-0.5 border-b border-white/5 last:border-0 ${log.level === LOG_LEVELS.ALERT ? 'bg-danger/5' : ''}`}
-          >
-            <span className="text-slate-600 shrink-0 w-20">{log.timestamp}</span>
-            <span className={`font-bold shrink-0 w-16 ${getLevelStyles(log.level)}`}>{log.level}</span>
-            <span className="text-slate-300">{log.message}</span>
-          </div>
-        ))}
-        <div className="flex gap-4 py-0.5 opacity-50">
-          <span className="text-slate-600 shrink-0 w-20">14:32:05.---</span>
-          <span className="text-slate-600 shrink-0 w-16">...</span>
-          <span className="text-slate-400">
-            Waiting for next sequence<span className="animate-pulse">_</span>
-          </span>
-        </div>
+      {/* Merged Data Overlay - Right */}
+      <div className="absolute top-6 right-6 w-72 flex flex-col gap-4 pointer-events-none z-10">
+         <DataCard title="System Logs" value="LIVE" accent="text-warning" icon={<Terminal size={16} />}>
+            <div className="font-mono text-[9px] text-slate-400 space-y-1 mt-2">
+              <div className="flex gap-2"><span className="text-slate-600">14:02:11</span> <span>&gt; Sequence start</span></div>
+              <div className="flex gap-2"><span className="text-slate-600">14:02:15</span> <span className="text-success">OK: Valve check</span></div>
+              <div className="flex gap-2"><span className="text-slate-600">14:02:22</span> <span className="text-warning">WARN: Pressure var</span></div>
+            </div>
+         </DataCard>
+      </div>
+
+      {/* 3D Model Viewer */}
+      <div className="w-full h-full bg-gradient-to-b from-slate-900/20 to-black/80">
+        <model-viewer
+          ref={modelViewerRef}
+          src="/models/limpet_reactor_cut_section.glb"
+          poster="/models/Gemini_Generated_Image_ob961lob961lob96.png"
+          alt="Limpet Reactor"
+          camera-controls
+          auto-rotate={!selectedHotspot}
+          interaction-prompt="auto"
+          shadow-intensity="1"
+          exposure="0.6"
+          loading="eager"
+          style={{ width: '100%', height: '100%', '--poster-color': 'transparent' } as React.CSSProperties}
+        >
+          {HOTSPOTS.map((hs) => (
+            <button
+              key={hs.name}
+              slot={hs.name}
+              data-position={hs.position}
+              data-normal={hs.normal}
+              className={`group w-6 h-6 rounded-full border-2 border-primary bg-primary/20 backdrop-blur-sm cursor-pointer transition-all duration-300 hover:scale-125 hover:bg-primary hover:shadow-[0_0_20px_rgba(0,240,255,0.6)] flex items-center justify-center ${
+                selectedHotspot === hs.name ? 'scale-125 bg-primary shadow-[0_0_20px_rgba(0,240,255,0.8)]' : ''
+              }`}
+              onClick={() => handleHotspotClick(hs)}
+            >
+              <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+              
+              {/* Tooltip */}
+              <div className={`absolute left-full ml-3 top-1/2 -translate-y-1/2 w-48 bg-slate-900/90 border border-primary/30 p-3 rounded-lg backdrop-blur-md transition-all duration-300 pointer-events-none opacity-0 translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 ${selectedHotspot === hs.name ? 'opacity-100 translate-x-0' : ''}`}>
+                <div className="text-[10px] font-bold text-primary uppercase tracking-widest mb-1">{hs.label}</div>
+                <div className="text-[10px] text-slate-300 leading-relaxed">{hs.description}</div>
+              </div>
+            </button>
+          ))}
+        </model-viewer>
+      </div>
+      
+      {/* Bottom Control Bar */}
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 p-2 bg-slate-900/60 backdrop-blur-md border border-white/10 rounded-full z-10">
+        <ControlButton icon={<Layers size={16} />} label="Layers" />
+        <ControlButton icon={<Box size={16} />} label="Explode" />
+        <ControlButton icon={<Activity size={16} />} label="Analyze" active />
+        <div className="w-px h-4 bg-white/10 mx-1"></div>
+        <ControlButton icon={<Info size={16} />} label="Info" />
       </div>
     </div>
   );
 };
 
-const FloatingAI: React.FC = () => {
-  const [isOpen, setIsOpen] = useState(false);
+const ChatbotView: React.FC = () => {
+  const [messages, setMessages] = useState<{role: 'user' | 'assistant', content: string}[]>([
+    { role: 'assistant', content: 'Tactical AI Assistant Online. How can I help you with the reactor diagnostics?' }
+  ]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSend = async () => {
+    if (!input.trim() || isLoading) return;
+    const userMsg = input.trim();
+    setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+    setInput('');
+    setIsLoading(true);
+
+    try {
+      const res = await fetch('http://localhost:8000/rag/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: userMsg })
+      });
+      const data = await res.json();
+      setMessages(prev => [...prev, { role: 'assistant', content: data.answer }]);
+    } catch {
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Error: Neural link disrupted.' }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
-      {isOpen && (
-        <div className="w-72 bg-slate-900/90 border border-primary/30 rounded-xl p-4 glass-blur shadow-2xl animate-in slide-in-from-bottom-2 fade-in">
-          <div className="flex gap-3 items-start">
-            <div className="p-2 bg-primary/20 rounded-lg text-primary">
-              <span className="material-symbols-outlined text-[20px]">smart_toy</span>
-            </div>
-            <div className="flex-1">
-              <div className="text-[9px] font-mono font-bold text-slate-500 uppercase tracking-widest mb-1">AI Tactical Assistant</div>
-              <p className="text-xs text-slate-200 leading-relaxed">
-                Critical thermal escalation detected in Unit 04. I recommend immediate coolant diversion from DIST-02 to prevent
-                potential breach.
-              </p>
-              <div className="mt-3 flex gap-2">
-                <button className="flex-1 py-1.5 bg-primary/20 hover:bg-primary/30 border border-primary/30 rounded text-[9px] font-bold uppercase tracking-wider transition-colors text-primary">
-                  Details
-                </button>
-                <button
-                  onClick={() => setIsOpen(false)}
-                  className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded text-[9px] font-bold uppercase tracking-wider transition-colors text-slate-400"
-                >
-                  Dismiss
-                </button>
+    <div className="w-full h-full flex flex-col p-6 max-w-4xl mx-auto">
+      <div className="flex-1 bg-slate-900/40 border border-white/10 rounded-2xl overflow-hidden flex flex-col glass-blur shadow-2xl">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+          {messages.map((msg, i) => (
+            <div key={i} className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${msg.role === 'user' ? 'bg-primary text-black' : 'bg-white/10 text-primary'}`}>
+                {msg.role === 'user' ? <Settings size={16} /> : <Bot size={16} />}
+              </div>
+              <div className={`max-w-[80%] p-4 rounded-2xl text-sm leading-relaxed ${
+                msg.role === 'user' 
+                  ? 'bg-primary/10 border border-primary/20 text-white rounded-tr-none' 
+                  : 'bg-white/5 border border-white/5 text-slate-300 rounded-tl-none'
+              }`}>
+                {msg.content}
               </div>
             </div>
+          ))}
+          {isLoading && (
+            <div className="flex gap-4">
+              <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center shrink-0 text-primary">
+                <Bot size={16} />
+              </div>
+              <div className="bg-white/5 border border-white/5 px-4 py-3 rounded-2xl rounded-tl-none flex items-center gap-2">
+                <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce"></div>
+                <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce delay-75"></div>
+                <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce delay-150"></div>
+              </div>
+            </div>
+          )}
+        </div>
+        
+        <div className="p-4 border-t border-white/5 bg-black/20">
+          <div className="flex gap-4 items-center bg-black/40 border border-white/10 rounded-xl px-4 py-2 focus-within:border-primary/50 transition-colors">
+            <Terminal size={18} className="text-slate-500" />
+            <input 
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSend()}
+              placeholder="Enter directive..."
+              className="flex-1 bg-transparent border-none outline-none text-sm font-mono text-white placeholder:text-slate-600"
+            />
+            <button onClick={handleSend} disabled={isLoading} className="p-2 hover:bg-primary/20 rounded-lg text-primary transition-colors disabled:opacity-50">
+              <ChevronRight size={20} />
+            </button>
           </div>
         </div>
-      )}
-
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-14 h-14 bg-primary rounded-xl flex items-center justify-center text-white shadow-[0_0_20px_rgba(14,165,233,0.4)] border border-white/20 hover:scale-105 active:scale-95 transition-all group"
-      >
-        <span className="material-symbols-outlined text-[30px] group-hover:rotate-12 transition-transform">smart_toy</span>
-        <div className="absolute -top-1 -right-1 w-4 h-4 bg-danger border-2 border-slate-900 rounded-full flex items-center justify-center text-[8px] font-bold">
-          1
-        </div>
-      </button>
+      </div>
     </div>
   );
 };
+
+const EspView: React.FC = () => {
+  // Placeholder variables for ESP sensor subscriptions
+  // Hook logic will be implemented here later
+  const [sensors] = useState({
+    sens1: { id: 'sens1', label: 'ESP Sensor 1', value: '---', unit: 'V' },
+    sens2: { id: 'sens2', label: 'ESP Sensor 2', value: '---', unit: 'A' },
+    sens3: { id: 'sens3', label: 'ESP Sensor 3', value: '---', unit: 'W' }
+  });
+
+  return (
+    <div className="w-full h-full flex flex-col p-6 max-w-4xl mx-auto gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {Object.values(sensors).map((sensor) => (
+          <div key={sensor.id} className="bg-slate-900/40 border border-white/10 p-6 rounded-xl backdrop-blur-md">
+            <div className="flex items-center gap-3 mb-4 text-slate-400">
+              <Activity size={20} />
+              <span className="text-xs font-bold uppercase tracking-widest">{sensor.label}</span>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-mono text-white font-bold">{sensor.value}</span>
+              <span className="text-sm text-slate-500 font-mono">{sensor.unit}</span>
+            </div>
+            <div className="w-full h-1 bg-white/5 rounded-full mt-4 overflow-hidden">
+              <div className="h-full bg-primary/50 w-0 animate-pulse"></div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex-1 bg-slate-900/40 border border-white/10 rounded-xl p-8 flex flex-col items-center justify-center text-center gap-6 backdrop-blur-md">
+        <div className="w-20 h-20 rounded-full bg-white/5 border border-white/10 flex items-center justify-center relative">
+          <Wifi size={32} className="text-slate-600" />
+          <div className="absolute inset-0 border-t border-primary/50 rounded-full animate-spin-slow opacity-50"></div>
+        </div>
+        <div>
+          <h2 className="text-xl font-bold text-white uppercase tracking-widest mb-2">Waiting for ESP-32 Handshake</h2>
+          <p className="text-slate-500 text-xs leading-relaxed max-w-sm mx-auto">
+            Telemetry stream inactive. Connect your ESP device to the WebSocket bridge to begin real-time data ingestion.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* -------------------------------------------------------------------------- */
+/*                                   HELPERS                                  */
+/* -------------------------------------------------------------------------- */
+
+const DataCard: React.FC<{ title: string; value: string; accent: string; icon: React.ReactNode; children?: React.ReactNode }> = ({ title, value, accent, icon, children }) => (
+  <div className="bg-slate-900/80 border border-white/10 p-4 rounded-xl backdrop-blur-md shadow-lg animate-in slide-in-from-left-4 fade-in duration-500">
+    <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center gap-2 text-slate-400">
+        {icon}
+        <span className="text-[10px] font-bold uppercase tracking-widest">{title}</span>
+      </div>
+      <div className={`text-[10px] font-bold ${accent} px-2 py-0.5 bg-white/5 rounded`}>{value}</div>
+    </div>
+    {children}
+  </div>
+);
+
+const Metric: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+  <div className="bg-white/5 rounded p-2">
+    <div className="text-[9px] text-slate-500 uppercase">{label}</div>
+    <div className="text-sm font-mono text-slate-200">{value}</div>
+  </div>
+);
+
+const ControlButton: React.FC<{ icon: React.ReactNode; label: string; active?: boolean }> = ({ icon, label, active }) => (
+  <button className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wide transition-all ${active ? 'bg-primary text-black' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}>
+    {icon}
+    <span>{label}</span>
+  </button>
+);
