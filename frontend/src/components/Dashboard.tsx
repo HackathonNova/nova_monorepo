@@ -1,11 +1,19 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import '@google/model-viewer';
+import mqtt from 'mqtt';
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, ReferenceLine, Area, AreaChart
+} from 'recharts';
 import {
   Activity,
+  AlertTriangle,
   Bot,
   Box,
+  Brain,
   ChevronRight,
   Cpu,
+  Droplets,
   Gauge,
   Info,
   Layers,
@@ -13,7 +21,10 @@ import {
   MessageSquare,
   Search,
   Settings,
+  ShieldCheck,
+  ShieldAlert,
   Terminal,
+  Thermometer,
   Wifi
 } from 'lucide-react';
 
@@ -375,50 +386,407 @@ const ChatbotView: React.FC = () => {
   );
 };
 
+/* -------------------------------------------------------------------------- */
+/*                          HISTORY BUFFER CONFIG                             */
+/* -------------------------------------------------------------------------- */
+
+const MAX_HISTORY = 60; // seconds of rolling data
+
+interface SensorSample {
+  t: number; // seconds since first reading
+  flow: number;
+  temperature: number;
+  pressure: number;
+  ph: number;
+  anomaly: boolean;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               ESP TELEMETRY                                */
+/* -------------------------------------------------------------------------- */
+
 const EspView: React.FC = () => {
-  // Placeholder variables for ESP sensor subscriptions
-  // Hook logic will be implemented here later
-  const [sensors] = useState({
-    sens1: { id: 'sens1', label: 'ESP Sensor 1', value: '---', unit: 'V' },
-    sens2: { id: 'sens2', label: 'ESP Sensor 2', value: '---', unit: 'A' },
-    sens3: { id: 'sens3', label: 'ESP Sensor 3', value: '---', unit: 'W' }
+  const [connected, setConnected] = useState(false);
+  const [anomaly, setAnomaly] = useState(false);
+  const [lastTimestamp, setLastTimestamp] = useState<number | null>(null);
+  const [anomalyCount, setAnomalyCount] = useState(0);
+  const [totalSamples, setTotalSamples] = useState(0);
+  const clientRef = useRef<mqtt.MqttClient | null>(null);
+  const firstTs = useRef<number | null>(null);
+
+  const [sensors, setSensors] = useState({
+    flow:        { label: 'Flow Rate',   value: '---', unit: 'L/min', icon: <Droplets size={20} /> },
+    temperature: { label: 'Temperature', value: '---', unit: '°C',    icon: <Thermometer size={20} /> },
+    pressure:    { label: 'Pressure',    value: '---', unit: 'bar',   icon: <Gauge size={20} /> },
+    ph:          { label: 'pH Level',    value: '---', unit: 'pH',    icon: <Activity size={20} /> },
   });
 
+  const [history, setHistory] = useState<SensorSample[]>([]);
+
+  const handleMessage = useCallback((_topic: string, message: Buffer) => {
+    try {
+      const data = JSON.parse(message.toString());
+      const ts = data.timestamp ?? 0;
+      if (firstTs.current === null) firstTs.current = ts;
+      const relT = Math.round((ts - (firstTs.current ?? ts)) / 1000);
+
+      const flow = Number(data.flow_l_min ?? 0);
+      const temperature = Number(data.temperature_c ?? 0);
+      const pressure = Number(data.pressure_bar ?? 0);
+      const ph = Number(data.ph ?? 0);
+      const isAnomaly = !!data.anomaly;
+
+      setSensors({
+        flow:        { label: 'Flow Rate',   value: String(data.flow_l_min    ?? '---'), unit: 'L/min', icon: <Droplets size={20} /> },
+        temperature: { label: 'Temperature', value: String(data.temperature_c ?? '---'), unit: '°C',    icon: <Thermometer size={20} /> },
+        pressure:    { label: 'Pressure',    value: String(data.pressure_bar   ?? '---'), unit: 'bar',   icon: <Gauge size={20} /> },
+        ph:          { label: 'pH Level',    value: String(data.ph             ?? '---'), unit: 'pH',    icon: <Activity size={20} /> },
+      });
+      setAnomaly(isAnomaly);
+      setLastTimestamp(ts);
+      setTotalSamples(prev => prev + 1);
+      if (isAnomaly) setAnomalyCount(prev => prev + 1);
+
+      setHistory(prev => {
+        const next = [...prev, { t: relT, flow, temperature, pressure, ph, anomaly: isAnomaly }];
+        return next.length > MAX_HISTORY ? next.slice(-MAX_HISTORY) : next;
+      });
+    } catch {
+      console.error('[MQTT] Failed to parse message');
+    }
+  }, []);
+
+  useEffect(() => {
+    const brokerUrl = 'wss://7ebd6f06ccae49478ac407523133bf18.s1.eu.hivemq.cloud:8884/mqtt';
+    const client = mqtt.connect(brokerUrl, {
+      username: 'ESP32_BOOTCAMP',
+      password: '0192837465nN',
+      protocol: 'wss',
+      reconnectPeriod: 5000,
+      connectTimeout: 10000,
+    });
+    clientRef.current = client;
+
+    client.on('connect', () => {
+      setConnected(true);
+      client.subscribe('factory/reactor1/sensors');
+    });
+    client.on('message', handleMessage);
+    client.on('close', () => setConnected(false));
+    client.on('reconnect', () => console.log('[MQTT] Reconnecting…'));
+
+    return () => { client.end(true); clientRef.current = null; };
+  }, [handleMessage]);
+
+  const anomalyRate = totalSamples > 0 ? ((anomalyCount / totalSamples) * 100).toFixed(1) : '0.0';
+  const normalRate = totalSamples > 0 ? (((totalSamples - anomalyCount) / totalSamples) * 100).toFixed(1) : '0.0';
+
   return (
-    <div className="w-full h-full flex flex-col p-6 max-w-4xl mx-auto gap-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {Object.values(sensors).map((sensor) => (
-          <div key={sensor.id} className="bg-slate-900/40 border border-white/10 p-6 rounded-xl backdrop-blur-md">
-            <div className="flex items-center gap-3 mb-4 text-slate-400">
-              <Activity size={20} />
-              <span className="text-xs font-bold uppercase tracking-widest">{sensor.label}</span>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-mono text-white font-bold">{sensor.value}</span>
-              <span className="text-sm text-slate-500 font-mono">{sensor.unit}</span>
-            </div>
-            <div className="w-full h-1 bg-white/5 rounded-full mt-4 overflow-hidden">
-              <div className="h-full bg-primary/50 w-0 animate-pulse"></div>
-            </div>
-          </div>
-        ))}
+    <div className="w-full h-full flex flex-col p-4 sm:p-6 max-w-7xl mx-auto gap-4 sm:gap-5 overflow-y-auto custom-scrollbar">
+      {/* ── Connection status bar ────────────────────────────────────── */}
+      <div className="flex items-center justify-between bg-slate-900/40 border border-white/10 rounded-xl px-4 py-3 backdrop-blur-md">
+        <div className="flex items-center gap-3">
+          <Wifi size={16} className={connected ? 'text-green-400' : 'text-red-400'} />
+          <span className="text-xs font-mono uppercase tracking-widest text-slate-400">
+            MQTT {connected ? <span className="text-green-400">CONNECTED</span> : <span className="text-red-400">DISCONNECTED</span>}
+          </span>
+        </div>
+        <div className="flex items-center gap-4">
+          {lastTimestamp !== null && (
+            <span className="text-[10px] font-mono text-slate-500">
+              uptime: {(lastTimestamp / 1000).toFixed(0)}s
+            </span>
+          )}
+          <span className="text-[10px] font-mono text-slate-500">
+            samples: {totalSamples}
+          </span>
+        </div>
       </div>
 
-      <div className="flex-1 bg-slate-900/40 border border-white/10 rounded-xl p-8 flex flex-col items-center justify-center text-center gap-6 backdrop-blur-md">
-        <div className="w-20 h-20 rounded-full bg-white/5 border border-white/10 flex items-center justify-center relative">
-          <Wifi size={32} className="text-slate-600" />
-          <div className="absolute inset-0 border-t border-primary/50 rounded-full animate-spin-slow opacity-50"></div>
+      {/* ── Anomaly alert banner ─────────────────────────────────────── */}
+      {anomaly && (
+        <div className="flex items-center gap-3 bg-red-900/30 border border-red-500/40 rounded-xl px-4 py-3 animate-pulse">
+          <AlertTriangle size={20} className="text-red-400 shrink-0" />
+          <div>
+            <span className="text-sm font-bold text-red-300 uppercase tracking-widest">Anomaly Detected</span>
+            <p className="text-[10px] text-red-400/80 mt-0.5">Sensor readings exceed normal thresholds. Check system immediately.</p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-xl font-bold text-white uppercase tracking-widest mb-2">Waiting for ESP-32 Handshake</h2>
-          <p className="text-slate-500 text-xs leading-relaxed max-w-sm mx-auto">
-            Telemetry stream inactive. Connect your ESP device to the WebSocket bridge to begin real-time data ingestion.
-          </p>
+      )}
+
+      {/* ── 4 Sensor Cards ───────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {Object.entries(sensors).map(([key, sensor]) => {
+          const numVal = parseFloat(sensor.value);
+          const hasValue = !isNaN(numVal);
+          const barWidth = hasValue ? Math.min(100, Math.max(5, (numVal / getMaxForSensor(key)) * 100)) : 0;
+
+          return (
+            <div
+              key={key}
+              className={`bg-slate-900/40 border rounded-xl p-5 backdrop-blur-md transition-all duration-300 ${
+                anomaly && isAnomalous(key, numVal)
+                  ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)]'
+                  : 'border-white/10 hover:border-primary/30'
+              }`}
+            >
+              <div className="flex items-center gap-3 mb-3 text-slate-400">
+                {sensor.icon}
+                <span className="text-[10px] font-bold uppercase tracking-widest">{sensor.label}</span>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-mono text-white font-bold tabular-nums">{sensor.value}</span>
+                <span className="text-sm text-slate-500 font-mono">{sensor.unit}</span>
+              </div>
+              <div className="w-full h-1 bg-white/5 rounded-full mt-3 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    anomaly && isAnomalous(key, numVal) ? 'bg-red-500' : 'bg-primary/50'
+                  }`}
+                  style={{ width: `${barWidth}%` }}
+                ></div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Sensor Time-Series Graphs ────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <SensorChart
+          title="Flow Rate"
+          unit="L/min"
+          dataKey="flow"
+          color="#00f0ff"
+          history={history}
+          normalMin={0}
+          normalMax={10}
+          description="Water flow through the main reactor pipe. Values > 10 L/min indicate a surge or sensor fault."
+        />
+        <SensorChart
+          title="Temperature"
+          unit="°C"
+          dataKey="temperature"
+          color="#f59e0b"
+          history={history}
+          normalMin={15}
+          normalMax={35}
+          description="Coolant temperature from the DS18B20 probe. Safe operating range is 15–35 °C."
+        />
+        <SensorChart
+          title="Pressure"
+          unit="bar"
+          dataKey="pressure"
+          color="#8b5cf6"
+          history={history}
+          normalMin={0}
+          normalMax={10}
+          description="System pressure computed from flow and temperature. Spikes beyond 10 bar may indicate blockage."
+        />
+        <SensorChart
+          title="pH Level"
+          unit="pH"
+          dataKey="ph"
+          color="#10b981"
+          history={history}
+          normalMin={6}
+          normalMax={9}
+          description="Water acidity/alkalinity. Normal water is pH 6–9. Outliers signal chemical imbalance."
+        />
+      </div>
+
+      {/* ── ML Model Diagnostics ─────────────────────────────────────── */}
+      <div className="bg-slate-900/40 border border-white/10 rounded-xl p-5 backdrop-blur-md">
+        <div className="flex items-center gap-3 mb-4">
+          <Brain size={20} className="text-purple-400" />
+          <span className="text-xs font-bold uppercase tracking-[0.2em] text-white">Isolation Forest — Anomaly Detection Model</span>
+        </div>
+        <p className="text-[11px] text-slate-400 leading-relaxed mb-5 max-w-3xl">
+          The on-device threshold detector flags anomalies in real-time. Below is a summary of the trained Isolation Forest model performance on the 5,000-sample synthetic dataset. The model learns the "shape" of normal data and isolates outliers that deviate from the learned distribution.
+        </p>
+
+        {/* Model KPIs */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
+          <ModelKPI label="Accuracy" value="97.5%" description="Overall correct predictions" good />
+          <ModelKPI label="Precision" value="87.6%" description="True positives / all flagged" good />
+          <ModelKPI label="Recall" value="87.6%" description="Detected / all actual anomalies" good />
+          <ModelKPI label="F1-Score" value="0.876" description="Harmonic mean of P & R" good />
+          <ModelKPI label="ROC-AUC" value="0.993" description="Ranking quality (1 = perfect)" good />
+          <ModelKPI label="PR-AUC" value="0.951" description="Performance on imbalanced data" good />
+        </div>
+
+        {/* Live session stats + anomaly timeline */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Session stats */}
+          <div className="bg-black/30 border border-white/5 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              {anomaly
+                ? <ShieldAlert size={18} className="text-red-400" />
+                : <ShieldCheck size={18} className="text-green-400" />
+              }
+              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-300">Live Session</span>
+            </div>
+            <div className="space-y-2">
+              <StatRow label="Total Samples" value={String(totalSamples)} />
+              <StatRow label="Anomalies Detected" value={String(anomalyCount)} alert={anomalyCount > 0} />
+              <StatRow label="Anomaly Rate" value={`${anomalyRate}%`} alert={Number(anomalyRate) > 15} />
+              <StatRow label="Normal Rate" value={`${normalRate}%`} />
+              <StatRow label="Current Status" value={anomaly ? 'ANOMALY' : 'NORMAL'} alert={anomaly} />
+            </div>
+          </div>
+
+          {/* Anomaly timeline chart */}
+          <div className="lg:col-span-2 bg-black/30 border border-white/5 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Activity size={18} className="text-primary" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-300">Anomaly Timeline</span>
+              <span className="text-[9px] text-slate-500 ml-auto">Red regions = anomaly detected</span>
+            </div>
+            <ResponsiveContainer width="100%" height={120}>
+              <AreaChart data={history} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="anomGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#ef4444" stopOpacity={0.6} />
+                    <stop offset="100%" stopColor="#ef4444" stopOpacity={0.05} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <XAxis dataKey="t" tick={{ fontSize: 9, fill: '#64748b' }} tickFormatter={(v: number) => `${v}s`} />
+                <YAxis domain={[0, 1]} tick={{ fontSize: 9, fill: '#64748b' }} tickFormatter={(v: number) => v === 1 ? 'ANO' : 'OK'} width={30} />
+                <Tooltip
+                  contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 10 }}
+                  formatter={(value) => [Number(value) === 1 ? 'ANOMALY' : 'Normal', 'Status']}
+                  labelFormatter={(l) => `t = ${l}s`}
+                />
+                <Area type="stepAfter" dataKey={(d: SensorSample) => d.anomaly ? 1 : 0} stroke="#ef4444" fill="url(#anomGrad)" strokeWidth={1.5} isAnimationActive={false} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Model description */}
+        <div className="mt-4 bg-black/20 border border-white/5 rounded-xl p-4">
+          <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-300 mb-2">How It Works</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-[11px] text-slate-400 leading-relaxed">
+            <div>
+              <span className="text-primary font-bold">1. Data Collection</span>
+              <p className="mt-1">The ESP32 reads flow, temperature, pressure, and pH every second and publishes JSON to an MQTT broker over TLS. The frontend subscribes via WebSocket.</p>
+            </div>
+            <div>
+              <span className="text-purple-400 font-bold">2. Isolation Forest</span>
+              <p className="mt-1">Trained on 5,000 synthetic samples (90% normal, 10% anomalies). The model isolates outliers by measuring how few random splits are needed to separate a data point — anomalies are easier to isolate.</p>
+            </div>
+            <div>
+              <span className="text-green-400 font-bold">3. Real-Time Scoring</span>
+              <p className="mt-1">Each incoming reading is classified as normal or anomalous. Threshold rules on the ESP32 provide instant on-device detection; the ML model provides a second, more nuanced opinion for the backend.</p>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* ── Disconnected state ───────────────────────────────────────── */}
+      {!connected && totalSamples === 0 && (
+        <div className="bg-slate-900/40 border border-white/10 rounded-xl p-8 flex flex-col items-center justify-center text-center gap-6 backdrop-blur-md">
+          <div className="w-20 h-20 rounded-full bg-white/5 border border-white/10 flex items-center justify-center relative">
+            <Wifi size={32} className="text-slate-600" />
+            <div className="absolute inset-0 border-t border-primary/50 rounded-full animate-spin-slow opacity-50"></div>
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-white uppercase tracking-widest mb-2">Connecting to MQTT Broker</h2>
+            <p className="text-slate-500 text-xs leading-relaxed max-w-sm mx-auto">
+              Establishing secure WebSocket connection to HiveMQ Cloud. Real-time telemetry will appear automatically.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
+/* -------------------------------------------------------------------------- */
+/*                          SENSOR CHART COMPONENT                            */
+/* -------------------------------------------------------------------------- */
+
+const SensorChart: React.FC<{
+  title: string;
+  unit: string;
+  dataKey: string;
+  color: string;
+  history: SensorSample[];
+  normalMin: number;
+  normalMax: number;
+  description: string;
+}> = ({ title, unit, dataKey, color, history, normalMin, normalMax, description }) => (
+  <div className="bg-slate-900/40 border border-white/10 rounded-xl p-4 backdrop-blur-md">
+    <div className="flex items-center justify-between mb-1">
+      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-300">{title}</span>
+      <span className="text-[9px] font-mono text-slate-500">{unit} — last {history.length}s</span>
+    </div>
+    <p className="text-[10px] text-slate-500 mb-3 leading-relaxed">{description}</p>
+    <ResponsiveContainer width="100%" height={160}>
+      <LineChart data={history} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+        <XAxis dataKey="t" tick={{ fontSize: 9, fill: '#64748b' }} tickFormatter={(v: number) => `${v}s`} />
+        <YAxis tick={{ fontSize: 9, fill: '#64748b' }} width={35} />
+        <Tooltip
+          contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 10 }}
+          labelFormatter={(l) => `t = ${l}s`}
+        />
+        <ReferenceLine y={normalMin} stroke="#facc15" strokeDasharray="4 4" strokeWidth={1} label={{ value: `min ${normalMin}`, fill: '#facc1580', fontSize: 8, position: 'left' }} />
+        <ReferenceLine y={normalMax} stroke="#facc15" strokeDasharray="4 4" strokeWidth={1} label={{ value: `max ${normalMax}`, fill: '#facc1580', fontSize: 8, position: 'left' }} />
+        <Line
+          type="monotone"
+          dataKey={dataKey}
+          stroke={color}
+          strokeWidth={2}
+          dot={false}
+          isAnimationActive={false}
+        />
+      </LineChart>
+    </ResponsiveContainer>
+  </div>
+);
+
+/* -------------------------------------------------------------------------- */
+/*                         MODEL KPI + STAT HELPERS                           */
+/* -------------------------------------------------------------------------- */
+
+const ModelKPI: React.FC<{ label: string; value: string; description: string; good?: boolean }> = ({ label, value, description, good }) => (
+  <div className="bg-black/30 border border-white/5 rounded-lg p-3 text-center">
+    <div className={`text-xl font-mono font-bold ${good ? 'text-green-400' : 'text-red-400'}`}>{value}</div>
+    <div className="text-[9px] font-bold uppercase tracking-widest text-slate-300 mt-1">{label}</div>
+    <div className="text-[8px] text-slate-500 mt-0.5">{description}</div>
+  </div>
+);
+
+const StatRow: React.FC<{ label: string; value: string; alert?: boolean }> = ({ label, value, alert }) => (
+  <div className="flex items-center justify-between">
+    <span className="text-[10px] text-slate-500">{label}</span>
+    <span className={`text-[10px] font-mono font-bold ${alert ? 'text-red-400' : 'text-slate-200'}`}>{value}</span>
+  </div>
+);
+
+/* --- EspView helpers --- */
+function getMaxForSensor(key: string): number {
+  switch (key) {
+    case 'flow':        return 15;
+    case 'temperature': return 50;
+    case 'pressure':    return 12;
+    case 'ph':          return 14;
+    default:            return 100;
+  }
+}
+
+function isAnomalous(key: string, val: number): boolean {
+  if (isNaN(val)) return false;
+  switch (key) {
+    case 'flow':        return val > 10;
+    case 'temperature': return val < 15 || val > 35;
+    case 'pressure':    return val < 0 || val > 10;
+    case 'ph':          return val < 6 || val > 9;
+    default:            return false;
+  }
+}
 
 /* -------------------------------------------------------------------------- */
 /*                                   HELPERS                                  */
