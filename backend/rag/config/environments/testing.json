@@ -1,0 +1,6 @@
+{
+  "vector_store": "memory",
+  "embedding_dim": 64,
+  "top_k": 2,
+  "log_level": "DEBUG"
+}

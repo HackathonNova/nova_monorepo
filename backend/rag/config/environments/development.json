@@ -1,0 +1,6 @@
+{
+  "vector_store": "memory",
+  "embedding_dim": 384,
+  "top_k": 4,
+  "log_level": "INFO"
+}
