@@ -11,7 +11,7 @@ import numpy as np
 from sklearn.ensemble import IsolationForest
 from rag.config import Settings, get_settings
 from rag.logging import configure_logging, get_logger
-from rag.pipelines import RAGPipeline
+from rag.generation import HFInferenceClient
 
 app = FastAPI()
 
@@ -43,18 +43,9 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     answer: str
 
-class RAGIngestRequest(BaseModel):
-    path: str
-
-class RAGIngestResponse(BaseModel):
-    chunks: int
-
 class RAGChatResponse(BaseModel):
     answer: str
     contexts: List[Dict[str, str]]
-
-class RAGMetricsResponse(BaseModel):
-    metrics: Dict[str, float]
 
 # --- Global State ---
 
@@ -73,9 +64,8 @@ class GlobalState:
     model: Optional[IsolationForest] = None
     is_model_fitted: bool = False
     data_count: int = 0
-    rag_settings: Optional[Settings] = None
-    rag_pipeline: Optional[RAGPipeline] = None
-    rag_docs_loaded: bool = False
+    settings: Optional[Settings] = None
+    hf_client: Optional[HFInferenceClient] = None
 
 state = GlobalState()
 
@@ -155,7 +145,7 @@ async def ai_loop():
         
         # Warmup check
         if state.data_count < 50:
-            print(f"AI Warming up... {state.data_count}/50 samples")
+            # print(f"AI Warming up... {state.data_count}/50 samples")
             continue
 
         # Prepare data for all sensors (simple flattening or feature extraction)
@@ -195,7 +185,7 @@ async def ai_loop():
         score = state.model.decision_function(latest)[0]
         prediction = state.model.predict(latest)[0] # -1 for anomaly
         
-        print(f"AI Score: {score:.3f}, Prediction: {prediction}")
+        # print(f"AI Score: {score:.3f}, Prediction: {prediction}")
 
         if score < -0.2:
             print("ANOMALY DETECTED!")
@@ -238,17 +228,10 @@ async def broadcast_state():
 async def startup_event():
     configure_logging()
     env_path = Path(__file__).resolve().parent / ".env"
-    state.rag_settings = get_settings(str(env_path))
-    state.rag_pipeline = RAGPipeline(state.rag_settings)
-    logger = get_logger("rag.startup")
-    docs_path = os.getenv("RAG_DOCS_PATH") or str(Path(__file__).resolve().parent / "rag")
-    if Path(docs_path).exists():
-        try:
-            state.rag_pipeline.ingest(docs_path)
-            state.rag_docs_loaded = True
-            logger.info("Auto-ingested documents from %s", docs_path)
-        except Exception as exc:
-            logger.error("Auto-ingest failed: %s", exc)
+    state.settings = get_settings(str(env_path))
+    # Initialize only HF Client, bypassing full RAG Pipeline
+    state.hf_client = HFInferenceClient(state.settings)
+    
     asyncio.create_task(simulate_sensors())
     asyncio.create_task(ai_loop())
 
@@ -302,43 +285,21 @@ async def chat(request: ChatRequest):
         
     return ChatResponse(answer=answer)
 
-@app.post("/rag/ingest", response_model=RAGIngestResponse)
-async def rag_ingest(request: RAGIngestRequest):
-    if not state.rag_pipeline:
-        raise HTTPException(status_code=500, detail="RAG pipeline not initialized")
-    logger = get_logger("rag.ingest")
-    try:
-        chunks = state.rag_pipeline.ingest(request.path)
-        state.rag_docs_loaded = True
-        return RAGIngestResponse(chunks=chunks)
-    except Exception as exc:
-        logger.error("RAG ingestion failed: %s", exc)
-        raise HTTPException(status_code=400, detail=str(exc))
-
 @app.post("/rag/chat", response_model=RAGChatResponse)
 async def rag_chat(request: ChatRequest):
-    if not state.rag_pipeline:
-        raise HTTPException(status_code=500, detail="RAG pipeline not initialized")
+    if not state.hf_client:
+        raise HTTPException(status_code=500, detail="AI Client not initialized")
     
-    # Bypass RAG context retrieval and use LLM directly if docs are not loaded or on error
-    # For now, we will just use the generator directly to avoid 404/400 errors from RAG pipeline if it fails
     logger = get_logger("rag.chat")
     try:
-        # Direct generation without retrieval for now to ensure chatbot works
-        # In a real scenario, we would fallback to this if retrieval fails
-        # But per instructions, we are bypassing RAG
-        answer = state.rag_pipeline.generator.generate(request.question, [])
+        # Direct generation without retrieval
+        # Pure API call to Hugging Face
+        answer = state.hf_client.generate(request.question, [])
         return RAGChatResponse(answer=answer, contexts=[])
     except Exception as exc:
         logger.error("Chat generation failed: %s", exc)
         # Fallback to simple rule-based response if LLM fails
         return RAGChatResponse(answer=f"I'm unable to process that right now. (Error: {str(exc)})", contexts=[])
-
-@app.get("/rag/metrics", response_model=RAGMetricsResponse)
-async def rag_metrics():
-    if not state.rag_pipeline:
-        raise HTTPException(status_code=500, detail="RAG pipeline not initialized")
-    return RAGMetricsResponse(metrics=state.rag_pipeline.metrics.snapshot())
 
 if __name__ == "__main__":
     import uvicorn

@@ -174,6 +174,7 @@ const Header: React.FC<{ activeView: ViewMode }> = ({ activeView }) => {
 
 const Main3DView: React.FC = () => {
   const [selectedHotspot, setSelectedHotspot] = useState<string | null>(null);
+  const [opacity, setOpacity] = useState(1);
   const modelViewerRef = useRef<HTMLElement>(null);
 
   const handleHotspotClick = (hs: HotspotData) => {
@@ -234,7 +235,7 @@ const Main3DView: React.FC = () => {
       <div className="w-full h-full bg-gradient-to-b from-slate-900/20 to-black/80">
         <model-viewer
           ref={modelViewerRef}
-          src="/models/limpet_reactor_cut_section.glb"
+          src="/models/reactorwithsensorsfinal.glb"
           poster="/models/Gemini_Generated_Image_ob961lob961lob96.png"
           alt="Limpet Reactor"
           camera-controls
@@ -243,7 +244,7 @@ const Main3DView: React.FC = () => {
           shadow-intensity="1"
           exposure="0.6"
           loading="eager"
-          style={{ width: '100%', height: '100%', '--poster-color': 'transparent' } as React.CSSProperties}
+          style={{ width: '100%', height: '100%', '--poster-color': 'transparent', opacity: opacity, transition: 'opacity 0.3s ease' } as React.CSSProperties}
         >
           {HOTSPOTS.map((hs) => (
             <button
@@ -273,6 +274,19 @@ const Main3DView: React.FC = () => {
         <ControlButton icon={<Layers size={16} />} label="Layers" />
         <ControlButton icon={<Box size={16} />} label="Explode" />
         <ControlButton icon={<Activity size={16} />} label="Analyze" active />
+        <div className="w-px h-4 bg-white/10 mx-1"></div>
+        <div className="flex items-center gap-2 px-3">
+          <span className="text-[9px] font-bold uppercase text-slate-400">Opacity</span>
+          <input 
+            type="range" 
+            min="0.1" 
+            max="1" 
+            step="0.1" 
+            value={opacity} 
+            onChange={(e) => setOpacity(parseFloat(e.target.value))}
+            className="w-16 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-primary"
+          />
+        </div>
         <div className="w-px h-4 bg-white/10 mx-1"></div>
         <ControlButton icon={<Info size={16} />} label="Info" />
       </div>

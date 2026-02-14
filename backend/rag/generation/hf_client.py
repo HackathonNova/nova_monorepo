@@ -17,18 +17,25 @@ class HFInferenceClient:
             raise ValueError("HF_MODEL_ID is required")
         if not prompt:
             raise ValueError("Prompt is required")
-        context_block = "\n".join(contexts)
-        composed = f"Context:\n{context_block}\n\nQuestion:\n{prompt}\n\nAnswer:"
+
+        # Build messages in OpenAI chat-completions format
+        messages: list[dict[str, str]] = []
+        if contexts:
+            context_block = "\n".join(contexts)
+            messages.append(
+                {"role": "system", "content": f"Use the following context to answer the question:\n{context_block}"}
+            )
+        messages.append({"role": "user", "content": prompt})
+
         payload = {
-            "inputs": composed,
-            "parameters": {
-                "max_new_tokens": self.settings.hf_max_tokens,
-                "temperature": self.settings.hf_temperature,
-                "top_p": self.settings.hf_top_p,
-                "return_full_text": False
-            }
+            "model": self.settings.hf_model_id,
+            "messages": messages,
+            "max_tokens": self.settings.hf_max_tokens,
+            "temperature": self.settings.hf_temperature,
+            "top_p": self.settings.hf_top_p,
+            "stream": False,
         }
-        url = f"{self.settings.hf_api_base}/models/{self.settings.hf_model_id}"
+        url = f"{self.settings.hf_api_base}/chat/completions"
         request = urllib.request.Request(
             url,
             data=json.dumps(payload).encode("utf-8"),
@@ -44,10 +51,7 @@ class HFInferenceClient:
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="ignore")
             detail = body or exc.reason
-            hint = ""
-            if exc.code == 410:
-                hint = " (model not available on serverless or requires access)"
-            raise RuntimeError(f"Hugging Face request failed: HTTP {exc.code} {detail}{hint}") from exc
+            raise RuntimeError(f"Hugging Face request failed: HTTP {exc.code} {detail}") from exc
         except Exception as exc:
             raise RuntimeError(f"Hugging Face request failed: {exc}") from exc
 
@@ -58,6 +62,14 @@ class HFInferenceClient:
 
         if isinstance(parsed, dict) and "error" in parsed:
             raise RuntimeError(f"Hugging Face API Error: {parsed['error']}")
+
+        # OpenAI chat-completions response format
+        try:
+            return str(parsed["choices"][0]["message"]["content"]).strip()
+        except (KeyError, IndexError, TypeError):
+            pass
+
+        # Legacy fallback for old-style responses
         if isinstance(parsed, list) and parsed:
             candidate = parsed[0]
             if isinstance(candidate, dict) and "generated_text" in candidate:
