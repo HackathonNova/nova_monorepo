@@ -219,3 +219,6 @@ nova_monorepo/
 
 ## License
 License not specified. Add a LICENSE file to define usage terms.
+
+<img width="484" height="420" alt="image" src="https://github.com/user-attachments/assets/83c8c398-9b29-43ca-b0e5-9a0f968a6fa4" />
+
