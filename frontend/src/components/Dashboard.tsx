@@ -487,6 +487,35 @@ interface SensorSample {
 /*                               ESP TELEMETRY                                */
 /* -------------------------------------------------------------------------- */
 
+const SENSOR_LABELS: Record<string, string> = {
+  flow: 'Flow Rate',
+  temperature: 'Temperature',
+  pressure: 'Pressure',
+  ph: 'pH Level',
+};
+
+const sendSensorAlert = async (sensorId: string, name: string, value: number) => {
+  try {
+    const url = import.meta.env.NEXT_PUBLIC_N8N_SENSOR_ALERT_URL;
+    if (!url) return;
+
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sensorId,
+        name,
+        status: 'bad',
+        value,
+        reactorId: 'reactor-1',
+        timestamp: new Date().toISOString(),
+      }),
+    });
+  } catch (err) {
+    console.error('Sensor alert webhook failed', err);
+  }
+};
+
 const EspView: React.FC = () => {
   const [connected, setConnected] = useState(false);
   const [anomaly, setAnomaly] = useState(false);
@@ -495,6 +524,12 @@ const EspView: React.FC = () => {
   const [totalSamples, setTotalSamples] = useState(0);
   const clientRef = useRef<mqtt.MqttClient | null>(null);
   const firstTs = useRef<number | null>(null);
+  const prevStatusRef = useRef<Record<string, boolean>>({
+    flow: false,
+    temperature: false,
+    pressure: false,
+    ph: false,
+  });
 
   const [sensors, setSensors] = useState({
     flow:        { label: 'Flow Rate',   value: '---', unit: 'L/min', icon: <Droplets size={20} /> },
@@ -520,6 +555,17 @@ const EspView: React.FC = () => {
       const equilibrium = Math.max(0, 95 - (temperature - 300) * 0.1);
       const conversion = Math.min(100, Math.max(0, 90 + (pressure - 10) * 2 - (temperature - 300) * 0.05));
       const drift = conversion - equilibrium;
+
+      const currentValues = { flow, temperature, pressure, ph };
+      Object.entries(currentValues).forEach(([key, val]) => {
+        const isBad = isAnomalous(key, val);
+        const wasBad = prevStatusRef.current[key];
+        
+        if (!wasBad && isBad) {
+          sendSensorAlert(key, SENSOR_LABELS[key], val);
+        }
+        prevStatusRef.current[key] = isBad;
+      });
 
       setSensors({
         flow:        { label: 'Flow Rate',   value: String(data.flow_l_min    ?? '---'), unit: 'L/min', icon: <Droplets size={20} /> },
