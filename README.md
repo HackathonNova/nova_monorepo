@@ -84,6 +84,9 @@ Add UI screenshots as they are captured:
 - Conversion and drift analytics panels
 - AI assistant view
 
+## Architecture
+- [Solution architecture](Solution%20architecture.pdf)
+
 ## Prerequisites
 ### Frontend
 - Node.js 18+ (recommended)
