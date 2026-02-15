@@ -472,11 +472,14 @@ const ChatbotView: React.FC = () => {
 const MAX_HISTORY = 60; // seconds of rolling data
 
 interface SensorSample {
-  t: number; // seconds since first reading
+  t: number;
   flow: number;
   temperature: number;
   pressure: number;
   ph: number;
+  conversion: number;
+  equilibrium: number;
+  drift: number;
   anomaly: boolean;
 }
 
@@ -514,6 +517,9 @@ const EspView: React.FC = () => {
       const pressure = Number(data.pressure_bar ?? 0);
       const ph = Number(data.ph ?? 0);
       const isAnomaly = !!data.anomaly;
+      const equilibrium = Math.max(0, 95 - (temperature - 300) * 0.1);
+      const conversion = Math.min(100, Math.max(0, 90 + (pressure - 10) * 2 - (temperature - 300) * 0.05));
+      const drift = conversion - equilibrium;
 
       setSensors({
         flow:        { label: 'Flow Rate',   value: String(data.flow_l_min    ?? '---'), unit: 'L/min', icon: <Droplets size={20} /> },
@@ -527,7 +533,7 @@ const EspView: React.FC = () => {
       if (isAnomaly) setAnomalyCount(prev => prev + 1);
 
       setHistory(prev => {
-        const next = [...prev, { t: relT, flow, temperature, pressure, ph, anomaly: isAnomaly }];
+        const next = [...prev, { t: relT, flow, temperature, pressure, ph, conversion, equilibrium, drift, anomaly: isAnomaly }];
         return next.length > MAX_HISTORY ? next.slice(-MAX_HISTORY) : next;
       });
     } catch {
@@ -557,8 +563,46 @@ const EspView: React.FC = () => {
     return () => { client.end(true); clientRef.current = null; };
   }, [handleMessage]);
 
+  const latestSample = history[history.length - 1];
+  const conversionNow = latestSample ? latestSample.conversion : 0;
+  const equilibriumNow = latestSample ? latestSample.equilibrium : 0;
+  const driftNow = latestSample ? latestSample.drift : 0;
   const anomalyRate = totalSamples > 0 ? ((anomalyCount / totalSamples) * 100).toFixed(1) : '0.0';
   const normalRate = totalSamples > 0 ? (((totalSamples - anomalyCount) / totalSamples) * 100).toFixed(1) : '0.0';
+  const driftTone =
+    driftNow > 2
+      ? 'text-blue-400'
+      : driftNow >= -2
+        ? 'text-green-400'
+        : driftNow >= -5
+          ? 'text-yellow-300'
+          : driftNow >= -10
+            ? 'text-orange-400'
+            : 'text-red-400';
+  const driftStroke =
+    driftNow > 2
+      ? '#3b82f6'
+      : driftNow >= -2
+        ? '#4ade80'
+        : driftNow >= -5
+          ? '#facc15'
+          : driftNow >= -10
+            ? '#fb923c'
+            : '#ef4444';
+  const driftAdvisory =
+    driftNow > 2
+      ? 'Conversion above theoretical? Check sensor calibration'
+      : driftNow >= -2
+        ? 'Operating at equilibrium'
+        : driftNow >= -5
+          ? 'Conversion below equilibrium: check feed, T, P'
+          : driftNow >= -10
+            ? 'Significant drift detected'
+            : 'High deviation – potential yield loss!';
+  const driftGaugeMin = -15;
+  const driftGaugeMax = 5;
+  const driftNormalized = Math.max(driftGaugeMin, Math.min(driftGaugeMax, driftNow));
+  const driftPercent = ((driftNormalized - driftGaugeMin) / (driftGaugeMax - driftGaugeMin)) * 100;
 
   return (
     <div className="w-full h-full flex flex-col p-4 sm:p-6 max-w-7xl mx-auto gap-4 sm:gap-5 overflow-y-auto custom-scrollbar">
@@ -592,6 +636,108 @@ const EspView: React.FC = () => {
           </div>
         </div>
       )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="bg-slate-900/40 border border-white/10 rounded-xl p-5 backdrop-blur-md flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-300">Conversion Rate (X)</span>
+            <span className="text-[10px] font-mono text-slate-500">Real-time</span>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-4xl font-mono text-white font-bold">{conversionNow.toFixed(1)}%</span>
+            <span className="text-xs text-slate-500">X_actual</span>
+          </div>
+          <div className="flex items-center gap-2 mt-3">
+            <span className="text-[10px] uppercase tracking-widest text-slate-500">X_eq</span>
+            <span className="text-[10px] font-mono text-slate-300">{equilibriumNow.toFixed(1)}%</span>
+          </div>
+          <div className="mt-4 h-2 bg-white/5 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary/70 transition-all duration-500"
+              style={{ width: `${Math.min(100, Math.max(0, conversionNow))}%` }}
+            ></div>
+          </div>
+        </div>
+        <div className="lg:col-span-2 bg-slate-900/40 border border-white/10 rounded-xl p-5 backdrop-blur-md">
+          <div className="flex items-center gap-2 mb-3">
+            <Activity size={18} className="text-primary" />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-300">Conversion Trend</span>
+            <span className="text-[9px] text-slate-500 ml-auto">X_actual vs X_equilibrium</span>
+          </div>
+          <ResponsiveContainer width="100%" height={180}>
+            <LineChart data={history.slice(-60)} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+              <XAxis dataKey="t" tick={{ fontSize: 9, fill: '#64748b' }} tickFormatter={(v: number) => `${v}s`} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 9, fill: '#64748b' }} width={30} />
+              <Tooltip
+                contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 10 }}
+                formatter={(value, name) => [Number(value).toFixed(1), name === 'conversion' ? 'X_actual' : 'X_equilibrium']}
+                labelFormatter={(l) => `t = ${l}s`}
+              />
+              <Line type="monotone" dataKey="conversion" stroke="#00f0ff" strokeWidth={2} dot={false} isAnimationActive={false} />
+              <Line type="monotone" dataKey="equilibrium" stroke="#ffffff" strokeWidth={1} strokeDasharray="4 4" dot={false} isAnimationActive={false} opacity={0.6} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="bg-slate-900/40 border border-white/10 rounded-xl p-5 backdrop-blur-md flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-300">Equilibrium Drift</span>
+            <span className="text-[10px] font-mono text-slate-500">ΔX (%)</span>
+          </div>
+          <div className="flex items-center justify-center mt-2">
+            <div className="relative w-40 h-20">
+              <svg viewBox="0 0 200 100" className="w-full h-full">
+                <path d="M10 90 A90 90 0 0 1 190 90" stroke="rgba(255,255,255,0.08)" strokeWidth="12" fill="none" />
+                <path
+                  d="M10 90 A90 90 0 0 1 190 90"
+                  stroke={driftStroke}
+                  strokeWidth="12"
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeDasharray="282.6"
+                  strokeDashoffset={(1 - driftPercent / 100) * 282.6}
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-end pb-1">
+                <span className={`text-3xl font-mono font-bold ${driftTone}`}>{driftNow.toFixed(1)}%</span>
+                <span className="text-[10px] text-slate-500 uppercase tracking-widest">Deviation</span>
+              </div>
+            </div>
+          </div>
+          <div className="mt-3 text-[10px] text-slate-400">{driftAdvisory}</div>
+        </div>
+        <div className="lg:col-span-2 bg-slate-900/40 border border-white/10 rounded-xl p-5 backdrop-blur-md">
+          <div className="flex items-center gap-2 mb-3">
+            <Activity size={18} className="text-primary" />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-300">Drift Trend</span>
+            <span className="text-[9px] text-slate-500 ml-auto">Last 30 minutes</span>
+          </div>
+          <ResponsiveContainer width="100%" height={180}>
+            <LineChart data={history.slice(-1800)} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+              <XAxis
+                dataKey="t"
+                tick={{ fontSize: 9, fill: '#64748b' }}
+                tickFormatter={(v: number) => `${Math.floor(v / 60)}m`}
+              />
+              <YAxis domain={[-12, 5]} tick={{ fontSize: 9, fill: '#64748b' }} width={30} />
+              <Tooltip
+                contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 10 }}
+                formatter={(value) => [Number(value).toFixed(2), 'Drift ΔX']}
+                labelFormatter={(l) => `t = ${Math.floor(Number(l) / 60)}m`}
+              />
+              <ReferenceLine y={2} stroke="#3b82f6" strokeDasharray="4 4" />
+              <ReferenceLine y={-2} stroke="#4ade80" strokeDasharray="4 4" />
+              <ReferenceLine y={-5} stroke="#facc15" strokeDasharray="4 4" />
+              <ReferenceLine y={-10} stroke="#fb923c" strokeDasharray="4 4" />
+              <Line type="monotone" dataKey="drift" stroke={driftStroke} strokeWidth={2} dot={false} isAnimationActive={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
 
       {/* ── 4 Sensor Cards ───────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
