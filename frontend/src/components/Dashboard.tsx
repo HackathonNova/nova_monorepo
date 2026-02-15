@@ -9,14 +9,11 @@ import {
   Activity,
   AlertTriangle,
   Bot,
-  Box,
   Brain,
   ChevronRight,
   Cpu,
   Droplets,
   Gauge,
-  Info,
-  Layers,
   LayoutDashboard,
   MessageSquare,
   Search,
@@ -42,6 +39,11 @@ interface HotspotData {
   description: string;
 }
 
+type ModelViewerElement = HTMLElement & {
+  cameraTarget?: string;
+  cameraOrbit?: string;
+};
+
 const HOTSPOTS: HotspotData[] = [
   {
     name: 'hotspot-core',
@@ -63,6 +65,20 @@ const HOTSPOTS: HotspotData[] = [
     normal: '0 0 1',
     label: 'Turbine Array',
     description: 'Generates 1.2GW of power. Vibration levels nominal.'
+  },
+  {
+    name: 'hotspot-pipe-top',
+    position: '0 1.55 0.6',
+    normal: '0 1 0',
+    label: 'Top Feed Pipe',
+    description: 'Primary feed line inlet. Click to focus the top pipe run.'
+  },
+  {
+    name: 'hotspot-pipe-bottom',
+    position: '0 -0.65 0.6',
+    normal: '0 -1 0',
+    label: 'Bottom Return Pipe',
+    description: 'Return flow conduit. Click to inspect the lower pipe junction.'
   }
 ];
 
@@ -133,9 +149,6 @@ const Sidebar: React.FC<{ activeView: ViewMode; onViewChange: (v: ViewMode) => v
       </nav>
 
       <div className="mt-auto flex flex-col gap-4">
-        <button className="w-10 h-10 rounded-lg flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/5 transition-all">
-          <Settings size={20} />
-        </button>
         <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary to-secondary p-[1px]">
           <div className="w-full h-full rounded-full bg-black/50 backdrop-blur flex items-center justify-center text-[10px] font-bold">
             AD
@@ -193,22 +206,11 @@ const Main3DView: React.FC = () => {
     setSelectedHotspot(isSelected ? null : hs.name);
 
     if (!isSelected && modelViewerRef.current) {
-      // Zoom and rotate to the hotspot
-      const viewer = modelViewerRef.current as any;
-      
-      // Calculate a target orbit based on the hotspot position
-      // This is a simple approximation; for perfect framing, you might need specific orbit values per hotspot
-      // Here we maintain the current theta/phi but zoom in (reduce radius)
-      
-      // We can use the hotspot position as the target
+      const viewer = modelViewerRef.current as ModelViewerElement;
       viewer.cameraTarget = hs.position;
-      
-      // And zoom in by setting a closer radius (e.g., '2m')
-      // You might want to store specific orbit values in HOTSPOTS if this generic zoom isn't perfect
       viewer.cameraOrbit = '0deg 75deg 2m'; 
     } else if (isSelected && modelViewerRef.current) {
-      // Reset view when deselecting
-      const viewer = modelViewerRef.current as any;
+      const viewer = modelViewerRef.current as ModelViewerElement;
       viewer.cameraTarget = 'auto';
       viewer.cameraOrbit = 'auto';
     }
@@ -263,7 +265,7 @@ const Main3DView: React.FC = () => {
               slot={hs.name}
               data-position={hs.position}
               data-normal={hs.normal}
-              className={`group w-6 h-6 rounded-full border-2 border-primary bg-primary/20 backdrop-blur-sm cursor-pointer transition-all duration-300 hover:scale-125 hover:bg-primary hover:shadow-[0_0_20px_rgba(0,240,255,0.6)] flex items-center justify-center ${
+              className={`group w-6 h-6 rounded-full border-2 border-primary bg-primary/20 backdrop-blur-sm cursor-pointer transition-all duration-300 hover:scale-125 hover:bg-primary hover:shadow-[0_0_20px_rgba(0,240,255,0.6)] active:scale-110 active:shadow-[0_0_25px_rgba(0,240,255,0.8)] flex items-center justify-center ${
                 selectedHotspot === hs.name ? 'scale-125 bg-primary shadow-[0_0_20px_rgba(0,240,255,0.8)]' : ''
               }`}
               onClick={() => handleHotspotClick(hs)}
@@ -282,24 +284,18 @@ const Main3DView: React.FC = () => {
       
       {/* Bottom Control Bar */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 p-2 bg-slate-900/60 backdrop-blur-md border border-white/10 rounded-full z-10">
-        <ControlButton icon={<Layers size={16} />} label="Layers" />
-        <ControlButton icon={<Box size={16} />} label="Explode" />
-        <ControlButton icon={<Activity size={16} />} label="Analyze" active />
-        <div className="w-px h-4 bg-white/10 mx-1"></div>
         <div className="flex items-center gap-2 px-3">
           <span className="text-[9px] font-bold uppercase text-slate-400">Opacity</span>
-          <input 
-            type="range" 
-            min="0.1" 
-            max="1" 
-            step="0.1" 
-            value={opacity} 
+          <input
+            type="range"
+            min="0.1"
+            max="1"
+            step="0.1"
+            value={opacity}
             onChange={(e) => setOpacity(parseFloat(e.target.value))}
-            className="w-16 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-primary"
+            className="w-20 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-primary"
           />
         </div>
-        <div className="w-px h-4 bg-white/10 mx-1"></div>
-        <ControlButton icon={<Info size={16} />} label="Info" />
       </div>
     </div>
   );
@@ -812,9 +808,3 @@ const Metric: React.FC<{ label: string; value: string }> = ({ label, value }) =>
   </div>
 );
 
-const ControlButton: React.FC<{ icon: React.ReactNode; label: string; active?: boolean }> = ({ icon, label, active }) => (
-  <button className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wide transition-all ${active ? 'bg-primary text-black' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}>
-    {icon}
-    <span>{label}</span>
-  </button>
-);

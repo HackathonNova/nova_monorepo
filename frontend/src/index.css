@@ -33,30 +33,9 @@ body {
   box-shadow: inset 0 0 0 1px rgba(0, 240, 255, 0.15);
 }
 
-.grid-bg {
-  background-image: linear-gradient(rgba(0, 240, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 240, 255, 0.08) 1px, transparent 1px);
-  background-size: 80px 80px;
-  opacity: 0.2;
-}
-
 .bg-grid-pattern {
   background-image: linear-gradient(rgba(14, 165, 233, 0.2) 1px, transparent 1px),
     linear-gradient(90deg, rgba(14, 165, 233, 0.2) 1px, transparent 1px);
-}
-
-.grid-lines {
-  background-image: linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-  background-size: 30px 30px;
-}
-
-.scanline-overlay {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to bottom, transparent 0%, rgba(0, 240, 255, 0.15) 50%, transparent 100%);
-  height: 200%;
-  opacity: 0.1;
 }
 
 .scanline {
@@ -67,16 +46,6 @@ body {
   animation: scanline 6s linear infinite;
   pointer-events: none;
   z-index: 5;
-}
-
-.crt-overlay::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.03) 0px, rgba(255, 255, 255, 0.03) 1px, transparent 1px, transparent 2px);
-  mix-blend-mode: overlay;
-  pointer-events: none;
-  opacity: 0.2;
 }
 
 .text-glow {
@@ -103,15 +72,6 @@ body {
   }
   100% {
     transform: translateY(50%);
-  }
-}
-
-@keyframes ticker {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(-50%);
   }
 }
 

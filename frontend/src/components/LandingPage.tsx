@@ -1,16 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import '@google/model-viewer';
 import {
-  Activity,
   BarChart3,
   Binary,
   ChevronRight,
   Cpu,
   Eye,
-  LayoutGrid,
   Layers,
   Send,
-  Shield,
   ShieldCheck,
   Terminal,
   Zap
@@ -32,29 +29,12 @@ export const LandingPage: React.FC<Props> = ({ onEnter }) => {
 
   return (
     <div className="relative min-h-screen">
-      <div className="fixed inset-0 grid-bg pointer-events-none z-0"></div>
-
-      <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
-        <div className="scanline-overlay animate-scanline"></div>
-      </div>
-
-      <Ticker />
       <Header onEnter={onEnter} />
 
       <main className="relative z-10">
         <Hero onEnter={onEnter} />
         <ReactorShowcase />
         <Capabilities />
-
-        <div className="w-full bg-surface-dark border-y border-border-dim py-4 overflow-hidden">
-          <div className="flex justify-around items-center opacity-40 text-[10px] md:text-xs font-bold text-primary uppercase tracking-[0.3em] whitespace-nowrap animate-pulse">
-            <span>// DATA STREAM ACTIVE //</span>
-            <span className="hidden md:inline">// ENCRYPTION: AES-256 //</span>
-            <span>// NODE SYNC: 100% //</span>
-            <span className="hidden md:inline">// PACKET LOSS: 0.00% //</span>
-            <span>// SERVER LOAD: 12% //</span>
-          </div>
-        </div>
 
         <Protocol />
         <TerminalCTA />
@@ -79,13 +59,6 @@ const Header: React.FC<{ onEnter: () => void }> = ({ onEnter }) => {
           </div>
         </div>
 
-        <div className="hidden md:flex items-center gap-8">
-          <NavLink icon={<LayoutGrid size={16} />} label="Dashboard" active />
-          <NavLink icon={<Activity size={16} />} label="Assets" />
-          <NavLink icon={<Shield size={16} />} label="Protocols" />
-          <NavLink icon={<Terminal size={16} />} label="AI Insights" />
-        </div>
-
         <button
           onClick={onEnter}
           className="px-6 py-2 bg-primary/10 border border-primary text-primary text-xs font-bold uppercase tracking-widest hover:bg-primary hover:text-black transition-all duration-300 technical-border shadow-[0_0_15px_rgba(0,240,255,0.2)]"
@@ -96,18 +69,6 @@ const Header: React.FC<{ onEnter: () => void }> = ({ onEnter }) => {
     </nav>
   );
 };
-
-const NavLink = ({ icon, label, active = false }: { icon: React.ReactNode; label: string; active?: boolean }) => (
-  <a
-    href="#"
-    className={`flex items-center gap-2 text-xs font-bold uppercase tracking-widest transition-colors ${
-      active ? 'text-primary' : 'text-white/50 hover:text-white'
-    }`}
-  >
-    {icon}
-    <span>{label}</span>
-  </a>
-);
 
 const Hero: React.FC<{ onEnter: () => void }> = ({ onEnter }) => {
   return (
@@ -140,9 +101,6 @@ const Hero: React.FC<{ onEnter: () => void }> = ({ onEnter }) => {
             >
               Initialize Twin <ChevronRight size={18} />
             </button>
-            <button className="flex items-center gap-2 px-8 py-4 bg-transparent border border-white/20 text-white font-bold uppercase tracking-widest hover:bg-white/5 transition-all">
-              Documentation
-            </button>
           </div>
 
           <div className="mt-12 flex gap-8">
@@ -170,12 +128,6 @@ const Hero: React.FC<{ onEnter: () => void }> = ({ onEnter }) => {
             </model-viewer>
           </div>
 
-          <div className="absolute top-10 right-0 animate-bounce text-[10px] text-primary/50 font-mono pointer-events-none">
-            [DATA_PACKET_0x44] -&gt; SYNCED
-          </div>
-          <div className="absolute bottom-20 left-0 animate-pulse text-[10px] text-secondary/50 font-mono pointer-events-none">
-            [NEURAL_LINK] -&gt; STABLE
-          </div>
         </div>
       </div>
     </section>
@@ -580,33 +532,4 @@ const SocialIcon = ({ icon }: { icon: React.ReactNode }) => (
   <a href="#" className="w-8 h-8 border border-white/10 flex items-center justify-center text-white/40 hover:border-primary hover:text-primary transition-all">
     {icon}
   </a>
-);
-
-const Ticker: React.FC = () => {
-  return (
-    <div className="fixed top-0 w-full z-[60] h-8 bg-black border-b border-border-dim flex items-center overflow-hidden">
-      <div className="flex whitespace-nowrap animate-[ticker_30s_linear_infinite] px-4 text-[10px] font-bold tracking-widest">
-        <StatusItem label="SYS.STATUS" value="NOMINAL" color="text-success" />
-        <StatusItem label="UPTIME" value="4192h 12m 33s" />
-        <StatusItem label="REACTOR_01" value="328°C" color="text-warning" />
-        <StatusItem label="PIPELINE_N" value="1024 PSI" />
-        <StatusItem label="VALVE_SEQUENCE" value="ACTIVE" />
-        <StatusItem label="NETWORK_LATENCY" value="4ms" />
-        <StatusItem label="AI_MODEL" value="v4.2.1 [TRAINING]" />
-
-        <StatusItem label="SYS.STATUS" value="NOMINAL" color="text-success" />
-        <StatusItem label="UPTIME" value="4192h 12m 33s" />
-        <StatusItem label="REACTOR_01" value="328°C" color="text-warning" />
-        <StatusItem label="PIPELINE_N" value="1024 PSI" />
-        <StatusItem label="VALVE_SEQUENCE" value="ACTIVE" />
-      </div>
-    </div>
-  );
-};
-
-const StatusItem = ({ label, value, color = 'text-white' }: { label: string; value: string; color?: string }) => (
-  <div className="flex items-center gap-2 mx-8 uppercase">
-    <span className="text-primary opacity-70">{label}:</span>
-    <span className={color}>{value}</span>
-  </div>
 );

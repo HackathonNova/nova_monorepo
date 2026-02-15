@@ -7,6 +7,19 @@ vi.mock('@google/model-viewer', () => ({
   default: () => null
 }));
 
+vi.mock('mqtt', () => {
+  const client = {
+    on: vi.fn(),
+    subscribe: vi.fn(),
+    end: vi.fn()
+  };
+  return {
+    default: {
+      connect: vi.fn(() => client)
+    }
+  };
+});
+
 // Mock fetch for chatbot
 global.fetch = vi.fn();
 
@@ -30,7 +43,7 @@ describe('Dashboard Component', () => {
     const espBtn = screen.getByText('ESP Telemetry');
     fireEvent.click(espBtn);
     expect(screen.getByText('ESP-32 Telemetry Stream')).toBeInTheDocument();
-    expect(screen.getByText('Signal Lost')).toBeInTheDocument();
+    expect(screen.getByText('Connecting to MQTT Broker')).toBeInTheDocument();
   });
 
   it('toggles hotspot info on click', () => {
