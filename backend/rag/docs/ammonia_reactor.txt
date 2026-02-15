@@ -1,0 +1,28 @@
+Ammonia Reactor Fundamentals
+
+Process overview
+- Reaction: N2 + 3H2 ⇌ 2NH3 (exothermic, equilibrium-limited)
+- Typical converter conditions: 150–250 bar, 400–500°C
+- Catalysts: promoted iron (industrial standard) or ruthenium (high-activity, lower pressure)
+
+Feed preparation
+- Remove CO, CO2, H2O, sulfur, and chlorides to avoid catalyst poisoning
+- Maintain H2:N2 ratio near 3:1 with slight H2 excess
+- Compress and preheat feed using heat recovered from reactor effluent
+
+Reactor and loop behavior
+- Multi-bed converter with inter-stage cooling to manage equilibrium and hot spots
+- Heat integration drives steam generation and preheats incoming synthesis gas
+- Ammonia is condensed from cooled effluent; unreacted gases are recycled
+- A purge stream prevents inert accumulation (argon, methane)
+
+Control priorities
+- Converter inlet temperature and bed temperature profile
+- Loop pressure and recycle ratio
+- H2/N2 ratio stability and purge rate
+- Cooling duty and condenser performance
+
+Safety and reliability
+- High-pressure integrity, leak detection, and relief systems
+- Ammonia toxicity exposure controls and ventilation
+- Rapid isolation or quench on temperature runaway or loss of circulation

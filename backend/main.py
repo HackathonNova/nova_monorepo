@@ -11,7 +11,7 @@ import numpy as np
 from sklearn.ensemble import IsolationForest
 from rag.config import Settings, get_settings
 from rag.logging import configure_logging, get_logger
-from rag.generation import HFInferenceClient
+from rag.generation import HFInferenceClient, postprocess_response
 
 app = FastAPI()
 
@@ -295,7 +295,7 @@ async def rag_chat(request: ChatRequest):
         # Direct generation without retrieval
         # Pure API call to Hugging Face
         answer = state.hf_client.generate(request.question, [])
-        return RAGChatResponse(answer=answer, contexts=[])
+        return RAGChatResponse(answer=postprocess_response(answer), contexts=[])
     except Exception as exc:
         logger.error("Chat generation failed: %s", exc)
         # Fallback to simple rule-based response if LLM fails

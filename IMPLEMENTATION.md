@@ -40,6 +40,25 @@
     - WebSocket `/ws`: Push incremental updates and events.
     - POST `/chat`: Rule-based engine responding with context from `twin_state`.
 
+## UI Cleanup Audit
+
+### Removed Non-Functional Buttons
+- Dashboard sidebar settings icon button (no handler)
+- Landing hero documentation button (no handler)
+- Landing header navigation links (anchor placeholders)
+
+### Removed Decorative UI Elements
+- Landing page ticker bar and status items
+- Landing page scanline overlay and grid background
+- Landing hero floating status callouts
+
+### Removed Orphaned Styles
+- grid-bg
+- grid-lines
+- scanline-overlay
+- crt-overlay
+- ticker keyframes
+
 ## Data Contracts
 
 ### WebSocket Message Schema

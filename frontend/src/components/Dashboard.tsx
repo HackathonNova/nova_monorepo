@@ -37,6 +37,8 @@ interface HotspotData {
   normal: string;
   label: string;
   description: string;
+  status: 'ok' | 'warn' | 'bad';
+  sensors: { label: string; value: string; status: 'ok' | 'warn' | 'bad' }[];
 }
 
 type ModelViewerElement = HTMLElement & {
@@ -47,38 +49,68 @@ type ModelViewerElement = HTMLElement & {
 const HOTSPOTS: HotspotData[] = [
   {
     name: 'hotspot-core',
-    position: '0 1 0',
+    position: '0 1.6 0.2',
     normal: '0 1 0',
     label: 'Reactor Core',
-    description: 'Primary fusion chamber operating at 98% efficiency. Thermal shielding active.'
+    description: 'Primary fusion chamber operating at 98% efficiency. Thermal shielding active.',
+    status: 'ok',
+    sensors: [
+      { label: 'Core Temp', value: '342°C', status: 'ok' },
+      { label: 'Core Pressure', value: '12.4 MPa', status: 'ok' },
+      { label: 'Radiation', value: '0.06 mSv', status: 'ok' }
+    ]
   },
   {
     name: 'hotspot-valve',
-    position: '0.5 0.5 0.5',
-    normal: '1 0 0',
+    position: '0.45 1.6 0.45',
+    normal: '0 1 0',
     label: 'Flow Valve A',
-    description: 'Regulates coolant distribution. Currently open at 45% capacity.'
+    description: 'Regulates coolant distribution. Currently open at 45% capacity.',
+    status: 'warn',
+    sensors: [
+      { label: 'Valve Position', value: '45%', status: 'warn' },
+      { label: 'Flow Rate', value: '8.6 L/min', status: 'ok' },
+      { label: 'Actuator Temp', value: '68°C', status: 'warn' }
+    ]
   },
   {
     name: 'hotspot-turbine',
-    position: '-0.5 0.2 -0.5',
-    normal: '0 0 1',
+    position: '-0.45 1.6 -0.1',
+    normal: '0 1 0',
     label: 'Turbine Array',
-    description: 'Generates 1.2GW of power. Vibration levels nominal.'
+    description: 'Generates 1.2GW of power. Vibration levels nominal.',
+    status: 'bad',
+    sensors: [
+      { label: 'Vibration', value: '14.2 mm/s', status: 'bad' },
+      { label: 'Bearing Temp', value: '112°C', status: 'bad' },
+      { label: 'Power Output', value: '0.9 GW', status: 'warn' }
+    ]
   },
   {
     name: 'hotspot-pipe-top',
-    position: '0 1.55 0.6',
+    position: '0.15 1.6 0.7',
     normal: '0 1 0',
     label: 'Top Feed Pipe',
-    description: 'Primary feed line inlet. Click to focus the top pipe run.'
+    description: 'Primary feed line inlet. Click to focus the top pipe run.',
+    status: 'ok',
+    sensors: [
+      { label: 'Inlet Pressure', value: '11.8 MPa', status: 'ok' },
+      { label: 'Flow Velocity', value: '6.2 m/s', status: 'ok' },
+      { label: 'Temp', value: '310°C', status: 'ok' }
+    ]
   },
   {
     name: 'hotspot-pipe-bottom',
-    position: '0 -0.65 0.6',
-    normal: '0 -1 0',
+    position: '-0.15 1.6 0.7',
+    normal: '0 1 0',
     label: 'Bottom Return Pipe',
-    description: 'Return flow conduit. Click to inspect the lower pipe junction.'
+    description: 'Return flow conduit. Click to inspect the lower pipe junction.',
+    status: 'ok',
+    sensors: [
+      { label: 'Return Pressure', value: '9.7 MPa', status: 'ok' },
+      { label: 'Flow Rate', value: '7.9 L/min', status: 'ok' },
+      { label: 'Temp', value: '294°C', status: 'ok' }
+    ]
   }
 ];
 
@@ -200,6 +232,17 @@ const Main3DView: React.FC = () => {
   const [selectedHotspot, setSelectedHotspot] = useState<string | null>(null);
   const [opacity, setOpacity] = useState(1);
   const modelViewerRef = useRef<HTMLElement>(null);
+  const selected = selectedHotspot ? HOTSPOTS.find((hs) => hs.name === selectedHotspot) ?? null : null;
+  const statusClass = {
+    ok: 'text-success border-success/30 bg-success/10',
+    warn: 'text-warning border-warning/30 bg-warning/10',
+    bad: 'text-alert border-alert/40 bg-alert/10'
+  };
+  const statusPulseClass = {
+    ok: 'bg-primary/40',
+    warn: 'bg-warning/40',
+    bad: 'bg-alert/40'
+  };
 
   const handleHotspotClick = (hs: HotspotData) => {
     const isSelected = selectedHotspot === hs.name;
@@ -265,22 +308,62 @@ const Main3DView: React.FC = () => {
               slot={hs.name}
               data-position={hs.position}
               data-normal={hs.normal}
-              className={`group w-6 h-6 rounded-full border-2 border-primary bg-primary/20 backdrop-blur-sm cursor-pointer transition-all duration-300 hover:scale-125 hover:bg-primary hover:shadow-[0_0_20px_rgba(0,240,255,0.6)] active:scale-110 active:shadow-[0_0_25px_rgba(0,240,255,0.8)] flex items-center justify-center ${
-                selectedHotspot === hs.name ? 'scale-125 bg-primary shadow-[0_0_20px_rgba(0,240,255,0.8)]' : ''
+              className={`group relative w-6 h-6 rounded-full border-2 backdrop-blur-sm cursor-pointer transition-all duration-300 hover:scale-125 active:scale-110 flex items-center justify-center ${
+                hs.status === 'bad'
+                  ? 'border-alert bg-alert/20 hover:bg-alert hover:shadow-[0_0_25px_rgba(255,42,109,0.6)] active:shadow-[0_0_30px_rgba(255,42,109,0.8)]'
+                  : hs.status === 'warn'
+                    ? 'border-warning bg-warning/20 hover:bg-warning hover:shadow-[0_0_20px_rgba(245,158,11,0.6)] active:shadow-[0_0_25px_rgba(245,158,11,0.8)]'
+                    : 'border-primary bg-primary/20 hover:bg-primary hover:shadow-[0_0_20px_rgba(0,240,255,0.6)] active:shadow-[0_0_25px_rgba(0,240,255,0.8)]'
+              } ${
+                selectedHotspot === hs.name
+                  ? hs.status === 'bad'
+                    ? 'scale-125 bg-alert shadow-[0_0_25px_rgba(255,42,109,0.9)]'
+                    : hs.status === 'warn'
+                      ? 'scale-125 bg-warning shadow-[0_0_22px_rgba(245,158,11,0.8)]'
+                      : 'scale-125 bg-primary shadow-[0_0_20px_rgba(0,240,255,0.8)]'
+                  : ''
               }`}
               onClick={() => handleHotspotClick(hs)}
             >
-              <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+              <div className={`absolute inset-0 rounded-full ${statusPulseClass[hs.status]} opacity-40 animate-ping`}></div>
+              <div className={`absolute inset-0 rounded-full ${statusPulseClass[hs.status]} opacity-30 animate-pulse`}></div>
+              <div className="relative w-1.5 h-1.5 bg-white rounded-full"></div>
               
               {/* Tooltip */}
-              <div className={`absolute left-full ml-3 top-1/2 -translate-y-1/2 w-48 bg-slate-900/90 border border-primary/30 p-3 rounded-lg backdrop-blur-md transition-all duration-300 pointer-events-none opacity-0 translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 ${selectedHotspot === hs.name ? 'opacity-100 translate-x-0' : ''}`}>
-                <div className="text-[10px] font-bold text-primary uppercase tracking-widest mb-1">{hs.label}</div>
+              <div className={`absolute left-full ml-3 top-1/2 -translate-y-1/2 w-48 bg-slate-900/90 border border-white/10 p-3 rounded-lg backdrop-blur-md transition-all duration-300 pointer-events-none opacity-0 translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 ${selectedHotspot === hs.name ? 'opacity-100 translate-x-0' : ''}`}>
+                <div className="flex items-center gap-2 mb-1">
+                  <div className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border ${statusClass[hs.status]}`}>
+                    {hs.status === 'bad' ? 'Alert' : hs.status === 'warn' ? 'Warning' : 'Nominal'}
+                  </div>
+                  <div className="text-[10px] font-bold text-slate-100 uppercase tracking-widest">{hs.label}</div>
+                </div>
                 <div className="text-[10px] text-slate-300 leading-relaxed">{hs.description}</div>
               </div>
             </button>
           ))}
         </model-viewer>
       </div>
+
+      {selected && (
+        <div className="absolute bottom-24 right-6 w-72 bg-slate-900/70 border border-white/10 rounded-xl p-4 backdrop-blur-md z-10 pointer-events-auto">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-200">{selected.label}</div>
+            <div className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border ${statusClass[selected.status]}`}>
+              {selected.status === 'bad' ? 'Bad Shape' : selected.status === 'warn' ? 'Degraded' : 'Nominal'}
+            </div>
+          </div>
+          <div className="space-y-2">
+            {selected.sensors.map((sensor) => (
+              <div key={sensor.label} className="flex items-center justify-between text-[10px]">
+                <span className="text-slate-400 uppercase tracking-widest">{sensor.label}</span>
+                <span className={`font-mono font-bold ${sensor.status === 'bad' ? 'text-alert' : sensor.status === 'warn' ? 'text-warning' : 'text-slate-100'}`}>
+                  {sensor.value}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       
       {/* Bottom Control Bar */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 p-2 bg-slate-900/60 backdrop-blur-md border border-white/10 rounded-full z-10">

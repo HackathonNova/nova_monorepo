@@ -2,15 +2,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import '@google/model-viewer';
 import {
   BarChart3,
-  Binary,
   ChevronRight,
   Cpu,
   Eye,
   Layers,
   Send,
   ShieldCheck,
-  Terminal,
-  Zap
+  Terminal
 } from 'lucide-react';
 
 interface Props {
@@ -19,6 +17,7 @@ interface Props {
 
 export const LandingPage: React.FC<Props> = ({ onEnter }) => {
   const [isLoaded, setIsLoaded] = useState(false);
+  const assistantRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoaded(true), 100);
@@ -32,12 +31,14 @@ export const LandingPage: React.FC<Props> = ({ onEnter }) => {
       <Header onEnter={onEnter} />
 
       <main className="relative z-10">
-        <Hero onEnter={onEnter} />
+        <Hero onEnter={onEnter} onExploreAssistant={() => assistantRef.current?.scrollIntoView({ behavior: 'smooth' })} />
         <ReactorShowcase />
         <Capabilities />
-
-        <Protocol />
-        <TerminalCTA />
+        <BuiltForIndustry />
+        <SafetyFirst />
+        <WhyItMatters />
+        <VisionSection />
+        <TerminalCTA ref={assistantRef} />
       </main>
 
       <Footer />
@@ -54,8 +55,8 @@ const Header: React.FC<{ onEnter: () => void }> = ({ onEnter }) => {
             <Cpu className="text-primary w-6 h-6" />
           </div>
           <div>
-            <span className="text-xl font-bold tracking-tighter text-white block leading-none">FORGE</span>
-            <span className="text-[10px] text-primary/60 tracking-[0.2em] font-mono">DIGITAL TWIN V4.0</span>
+            <span className="text-xl font-bold tracking-tighter text-white block leading-none">NovaOps</span>
+            <span className="text-[10px] text-primary/60 tracking-[0.2em] font-mono">INDUSTRIAL DIGITAL TWIN</span>
           </div>
         </div>
 
@@ -63,14 +64,14 @@ const Header: React.FC<{ onEnter: () => void }> = ({ onEnter }) => {
           onClick={onEnter}
           className="px-6 py-2 bg-primary/10 border border-primary text-primary text-xs font-bold uppercase tracking-widest hover:bg-primary hover:text-black transition-all duration-300 technical-border shadow-[0_0_15px_rgba(0,240,255,0.2)]"
         >
-          System Access
+          View Live Digital Twin
         </button>
       </div>
     </nav>
   );
 };
 
-const Hero: React.FC<{ onEnter: () => void }> = ({ onEnter }) => {
+const Hero: React.FC<{ onEnter: () => void; onExploreAssistant: () => void }> = ({ onEnter, onExploreAssistant }) => {
   return (
     <section className="pt-48 pb-24 px-4 overflow-hidden">
       <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-12 items-center">
@@ -80,18 +81,17 @@ const Hero: React.FC<{ onEnter: () => void }> = ({ onEnter }) => {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
             </span>
-            Real-time Telemetry Active
+            Industrial Intelligence Platform
           </div>
 
           <h1 className="text-5xl md:text-7xl font-bold tracking-tighter leading-none mb-6">
-            <span className="text-white">THE FUTURE OF</span>
+            <span className="text-white">INDUSTRIAL INTELLIGENCE.</span>
             <br />
-            <span className="text-primary text-glow italic">INDUSTRIAL INTEL.</span>
+            <span className="text-primary text-glow italic">IN REAL TIME.</span>
           </h1>
 
           <p className="text-white/60 max-w-lg mb-10 leading-relaxed font-sans">
-            Deploy hyper-accurate digital representations of your physical assets. Forge integrates sensory data with predictive neural
-            networks to preempt catastrophic failures before they manifest.
+            NovaOps is an AI-powered digital twin platform for monitoring, analyzing, and optimizing high-pressure industrial reactors.
           </p>
 
           <div className="flex flex-wrap gap-4">
@@ -99,14 +99,20 @@ const Hero: React.FC<{ onEnter: () => void }> = ({ onEnter }) => {
               onClick={onEnter}
               className="flex items-center gap-2 px-8 py-4 bg-primary text-black font-bold uppercase tracking-widest hover:brightness-110 transition-all"
             >
-              Initialize Twin <ChevronRight size={18} />
+              View Live Digital Twin <ChevronRight size={18} />
+            </button>
+            <button
+              onClick={onExploreAssistant}
+              className="flex items-center gap-2 px-8 py-4 bg-transparent border border-white/20 text-white font-bold uppercase tracking-widest hover:bg-white/5 transition-all"
+            >
+              Explore AI Assistant
             </button>
           </div>
 
           <div className="mt-12 flex gap-8">
-            <Stat label="Live Nodes" value="1,429" />
-            <Stat label="Prediction Accuracy" value="99.8%" />
-            <Stat label="Latency" value="0.4ms" />
+            <Stat label="Live Sensors" value="1,429" />
+            <Stat label="Anomaly Precision" value="99.8%" />
+            <Stat label="Risk Latency" value="0.4ms" />
           </div>
         </div>
 
@@ -184,22 +190,23 @@ const ReactorShowcase: React.FC = () => {
         </div>
 
         <div className={`fade-in-up ${showDescription ? 'is-visible' : ''}`} style={{ transitionDelay: '200ms' }}>
-          <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-primary/60 mb-4">Project Overview</div>
+          <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-primary/60 mb-4">What Is NovaOps?</div>
           <h2 className="text-4xl md:text-5xl font-bold tracking-tighter text-white leading-tight mb-6">
-            Limpet Reactor Digital Twin
+            Interactive Reactor Intelligence
           </h2>
           <p className="text-white/60 text-sm md:text-base leading-relaxed mb-6">
-            A high-fidelity simulation stack that fuses live telemetry, predictive control, and safety envelopes into a single operational
-            surface. The twin provides continuous visibility into thermal stability, flow efficiency, and structural health.
+            NovaOps combines real-time sensor data, anomaly detection, and an interactive 3D digital twin to deliver intelligent
+            operational insights for industrial systems. Instead of static dashboards, operators interact with a living model of their
+            reactor — powered by AI.
           </p>
           <div className="grid sm:grid-cols-2 gap-4 text-sm text-white/70">
             <div className="p-4 bg-white/5 border border-white/10 rounded-xl">
-              <div className="text-primary font-bold text-xs uppercase tracking-widest mb-2">Purpose</div>
-              Accelerate analysis, rehearse operational scenarios, and reduce downtime with real-time insight.
+              <div className="text-primary font-bold text-xs uppercase tracking-widest mb-2">Real-Time Insight</div>
+              Live component-level context paired with sensor intelligence and operator guidance.
             </div>
             <div className="p-4 bg-white/5 border border-white/10 rounded-xl">
-              <div className="text-primary font-bold text-xs uppercase tracking-widest mb-2">Benefits</div>
-              Predict anomalies earlier, validate interventions, and coordinate teams around a shared visual context.
+              <div className="text-primary font-bold text-xs uppercase tracking-widest mb-2">AI-Powered</div>
+              Context-aware interpretation of operating conditions and early anomaly signals.
             </div>
           </div>
         </div>
@@ -219,33 +226,28 @@ const Capabilities: React.FC = () => {
   const items = [
     {
       icon: <Layers size={24} />,
-      title: 'Spatial Twins',
-      desc: 'Precise 1:1 photogrammetric reconstruction of industrial facilities.'
-    },
-    {
-      icon: <Zap size={24} />,
-      title: 'Real-time Telemetry',
-      desc: 'Millisecond-latency data streaming from IoT edge sensors.'
-    },
-    {
-      icon: <Binary size={24} />,
-      title: 'Neural Forecasting',
-      desc: 'Predict maintenance requirements up to 72 hours in advance.'
-    },
-    {
-      icon: <ShieldCheck size={24} />,
-      title: 'Protocol Security',
-      desc: 'Post-quantum encrypted data channels for mission-critical operations.'
+      title: 'Real-Time Digital Twin',
+      desc: 'Interactive 3D reactor model with live sensor mapping and component-level monitoring.'
     },
     {
       icon: <BarChart3 size={24} />,
-      title: 'Live Simulation',
-      desc: "Run 'what-if' scenarios against the digital twin without plant impact."
+      title: 'AI Anomaly Detection',
+      desc: 'Automated detection of abnormal pressure, temperature, and ratio deviations using statistical monitoring.'
+    },
+    {
+      icon: <Terminal size={24} />,
+      title: 'AI Operations Assistant',
+      desc: 'Context-aware assistant trained on ammonia synthesis operations and safety principles.'
+    },
+    {
+      icon: <ShieldCheck size={24} />,
+      title: 'Risk Scoring Engine',
+      desc: 'Continuous system stability assessment with real-time risk index visualization.'
     },
     {
       icon: <Eye size={24} />,
-      title: 'Visual Ops',
-      desc: 'Augmented reality overlays for complex hardware maintenance.'
+      title: 'Simulation Mode',
+      desc: 'Test pressure spikes and thermal deviations in a safe digital environment.'
     }
   ];
 
@@ -255,9 +257,9 @@ const Capabilities: React.FC = () => {
         <div className="mb-16">
           <h2 className="text-3xl font-bold text-white tracking-tighter uppercase flex items-center gap-4">
             <span className="w-8 h-px bg-primary"></span>
-            System Capabilities
+            Core Features
           </h2>
-          <p className="text-white/40 text-sm mt-2 ml-12">Comprehensive suite for industrial autonomy.</p>
+          <p className="text-white/40 text-sm mt-2 ml-12">Intelligent capabilities built for high-pressure operations.</p>
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -286,103 +288,96 @@ const Capabilities: React.FC = () => {
   );
 };
 
-const Protocol: React.FC = () => {
-  return (
-    <section className="py-24 px-4">
-      <div className="max-w-7xl mx-auto">
-        <div className="grid lg:grid-cols-3 gap-12">
-          <div className="lg:col-span-2">
-            <h2 className="text-3xl font-bold text-white tracking-tighter uppercase mb-8">Active Operations</h2>
-            <div className="border border-border-dim bg-surface-dark overflow-hidden technical-border">
-              <div className="bg-white/5 border-b border-border-dim p-4 flex items-center justify-between text-[10px] font-bold text-primary tracking-widest uppercase">
-                <span>Terminal Log Stream</span>
-                <span>ID: FORGE-882-QX</span>
-              </div>
-              <div className="p-6 font-mono text-[11px] leading-relaxed max-h-[400px] overflow-y-auto custom-scrollbar">
-                <LogLine timestamp="12:04:12" status="OK" msg="Initializing core thermal sensors..." />
-                <LogLine timestamp="12:04:13" status="OK" msg="Establishing handshakes with Node_01 through Node_48." />
-                <LogLine timestamp="12:04:15" status="WARN" msg="Sub-optimal pressure detected in Line C-4. Auto-compensating." color="text-warning" />
-                <LogLine timestamp="12:04:18" status="OK" msg="Neural model V4.2 loaded into memory buffer." />
-                <LogLine timestamp="12:04:22" status="CRIT" msg="Predictive anomaly detected at Turbine Unit 7. Confidence: 82%." color="text-alert" />
-                <LogLine timestamp="12:04:25" status="OK" msg="Dispatching maintenance droid MD-8 for visual inspection." />
-                <LogLine timestamp="12:04:30" status="OK" msg="Syncing digital twin database (PostgreSQL 15 Cluster)." />
-                <LogLine timestamp="12:04:35" status="INFO" msg="User admin@forge.io authorized session." />
-                <LogLine timestamp="12:04:40" status="OK" msg="Thermal equilibrium reached at 328°C." />
-              </div>
-            </div>
+const BuiltForIndustry: React.FC = () => (
+  <section className="py-24 px-4 bg-surface-dark/50">
+    <div className="max-w-7xl mx-auto">
+      <div className="mb-10">
+        <h2 className="text-3xl font-bold text-white tracking-tighter uppercase flex items-center gap-4">
+          <span className="w-8 h-px bg-primary"></span>
+          Built For Industrial Environments
+        </h2>
+      </div>
+      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm text-white/70">
+        {[
+          'High-pressure chemical synthesis',
+          'Process optimization',
+          'Operator training',
+          'Predictive maintenance'
+        ].map((item) => (
+          <div key={item} className="p-5 bg-bg-dark border border-white/5 rounded-xl">
+            <span className="text-primary text-[10px] font-bold uppercase tracking-widest">NovaOps</span>
+            <p className="mt-3 text-white/70 leading-relaxed">{item}</p>
           </div>
+        ))}
+      </div>
+    </div>
+  </section>
+);
 
-          <div>
-            <h2 className="text-3xl font-bold text-white tracking-tighter uppercase mb-8">Directives</h2>
-            <div className="space-y-4">
-              <Directive status="Active" title="Thermal Regulation" progress={85} />
-              <Directive status="Pending" title="Asset Resync" progress={12} />
-              <Directive status="Warning" title="Pressure Balance" progress={44} color="border-warning" text="text-warning" />
-              <Directive status="Active" title="Neural Training" progress={98} />
-            </div>
+const SafetyFirst: React.FC = () => (
+  <section className="py-24 px-4">
+    <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-10 items-start">
+      <div>
+        <h2 className="text-3xl font-bold text-white tracking-tighter uppercase mb-4">Safety First</h2>
+        <p className="text-white/60 text-sm leading-relaxed">NovaOps prioritizes:</p>
+      </div>
+      <div className="grid sm:grid-cols-2 gap-4 text-sm text-white/70">
+        {[
+          'High-pressure containment integrity',
+          'Catalyst protection',
+          'Toxic gas monitoring',
+          'Rapid upset response guidance'
+        ].map((item) => (
+          <div key={item} className="p-5 bg-surface-dark border border-white/10 rounded-xl">
+            <div className="text-primary text-[10px] font-bold uppercase tracking-widest mb-2">Safety</div>
+            <p className="leading-relaxed">{item}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+);
 
-            <div className="mt-8 p-6 bg-primary/5 border border-primary/20 technical-border">
-              <div className="text-[10px] font-bold text-primary uppercase tracking-widest mb-2">Internal Comms</div>
-              <p className="text-xs text-white/60 font-sans italic leading-relaxed">
-                "Note: The upcoming maintenance cycle for Sector 4 is scheduled for 03:00 UTC. Ensure twin mirrors are in read-only mode."
-              </p>
-            </div>
+const WhyItMatters: React.FC = () => (
+  <section className="py-24 px-4 bg-surface-dark/50">
+    <div className="max-w-7xl mx-auto">
+      <h2 className="text-3xl font-bold text-white tracking-tighter uppercase mb-8">Why It Matters</h2>
+      <div className="grid lg:grid-cols-2 gap-8">
+        <div className="space-y-4 text-white/60 text-sm">
+          <p>Industrial downtime is expensive.</p>
+          <p>Unplanned shutdowns are dangerous.</p>
+          <p>Manual monitoring is reactive.</p>
+        </div>
+        <div className="p-6 bg-black/30 border border-white/10 rounded-xl">
+          <div className="text-primary text-[10px] font-bold uppercase tracking-widest mb-3">NovaOps Transforms Monitoring Into</div>
+          <div className="flex flex-wrap gap-3 text-xs font-bold uppercase tracking-widest">
+            {['Proactive', 'Intelligent', 'Predictive'].map((item) => (
+              <span key={item} className="px-3 py-2 bg-primary/10 border border-primary/40 text-primary rounded-full">
+                {item}
+              </span>
+            ))}
           </div>
         </div>
       </div>
-    </section>
-  );
-};
-
-const LogLine = ({
-  timestamp,
-  status,
-  msg,
-  color = 'text-white/70'
-}: {
-  timestamp: string;
-  status: string;
-  msg: string;
-  color?: string;
-}) => (
-  <div className="mb-2 flex gap-4 border-l border-white/5 pl-4 hover:bg-white/5 transition-colors">
-    <span className="text-white/30 shrink-0">[{timestamp}]</span>
-    <span className={`font-bold shrink-0 w-12 ${status === 'OK' ? 'text-success' : status === 'CRIT' ? 'text-alert' : 'text-primary'}`}>
-      {status}
-    </span>
-    <span className={color}>{msg}</span>
-  </div>
+    </div>
+  </section>
 );
 
-const Directive = ({
-  status,
-  title,
-  progress,
-  color = 'border-border-dim',
-  text = 'text-white'
-}: {
-  status: string;
-  title: string;
-  progress: number;
-  color?: string;
-  text?: string;
-}) => (
-  <div className={`p-4 bg-surface-dark border ${color} technical-border`}>
-    <div className="flex justify-between items-center mb-2">
-      <span className={`text-[10px] font-bold uppercase tracking-widest ${text}`}>{title}</span>
-      <span className="text-[10px] text-white/30 uppercase">{status}</span>
+const VisionSection: React.FC = () => (
+  <section className="py-24 px-4">
+    <div className="max-w-6xl mx-auto text-center">
+      <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-primary/60 mb-4">Vision</div>
+      <h2 className="text-3xl md:text-4xl font-bold text-white tracking-tighter mb-6">
+        The future of industry is transparent, intelligent, and digitally mirrored.
+      </h2>
+      <p className="text-white/60 text-sm md:text-base leading-relaxed max-w-3xl mx-auto">
+        NovaOps is the bridge between physical infrastructure and AI-driven decision-making.
+      </p>
     </div>
-    <div className="h-1 bg-white/5 w-full">
-      <div className="h-full bg-primary transition-all duration-1000" style={{ width: `${progress}%` }}></div>
-    </div>
-    <div className="flex justify-between mt-1">
-      <span className="text-[9px] text-white/40">COMPLETION</span>
-      <span className="text-[9px] text-primary">{progress}%</span>
-    </div>
-  </div>
+  </section>
 );
 
-const TerminalCTA: React.FC = () => {
+const TerminalCTA = React.forwardRef<HTMLDivElement>((_, ref) => {
   const [input, setInput] = useState('');
   const [history, setHistory] = useState<{ type: 'user' | 'bot'; text: string }[]>([
     { type: 'bot', text: 'SYSTEM_INITIALIZED. WAITING FOR DIRECTIVE...' }
@@ -421,13 +416,13 @@ const TerminalCTA: React.FC = () => {
   };
 
   return (
-    <section className="py-24 px-4">
+    <section ref={ref} className="py-24 px-4">
       <div className="max-w-4xl mx-auto">
         <div className="bg-black border border-primary/30 rounded-lg overflow-hidden technical-border shadow-[0_0_30px_rgba(0,240,255,0.1)]">
           <div className="bg-primary/10 px-4 py-2 border-b border-primary/20 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Terminal size={14} className="text-primary" />
-              <span className="text-[10px] font-bold text-primary tracking-[0.2em] uppercase">Forge Terminal Access</span>
+              <span className="text-[10px] font-bold text-primary tracking-[0.2em] uppercase">NovaOps AI Assistant</span>
             </div>
             <div className="flex gap-1.5">
               <div className="w-2 h-2 rounded-full bg-alert/50"></div>
@@ -465,11 +460,12 @@ const TerminalCTA: React.FC = () => {
           </form>
         </div>
 
-        <p className="text-center text-[10px] text-white/20 mt-4 uppercase tracking-[0.3em]">Secure Quantum Tunnel Established // AES-256 E2EE</p>
+        <p className="text-center text-[10px] text-white/20 mt-4 uppercase tracking-[0.3em]">Context-aware operations support for ammonia synthesis</p>
       </div>
     </section>
   );
-};
+});
+TerminalCTA.displayName = 'TerminalCTA';
 
 const Footer: React.FC = () => {
   return (
@@ -479,12 +475,12 @@ const Footer: React.FC = () => {
           <div className="col-span-1 md:col-span-1">
             <div className="flex items-center gap-2 mb-6">
               <div className="w-8 h-8 bg-primary/20 border border-primary flex items-center justify-center">
-                <span className="text-primary font-bold text-xs">F</span>
+                <span className="text-primary font-bold text-xs">N</span>
               </div>
-              <span className="font-bold tracking-tighter text-white">FORGE</span>
+              <span className="font-bold tracking-tighter text-white">NovaOps</span>
             </div>
             <p className="text-xs text-white/40 leading-relaxed font-sans mb-6">
-              The leading industrial twin orchestration engine. Building the digital backbone for tomorrow's infrastructure.
+              AI-powered digital twin intelligence for high-pressure industrial reactors.
             </p>
             <div className="flex gap-4">
               <SocialIcon icon={<svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M19.633 7.997c.014.2.014.4.014.6 0 6.1-4.646 13.129-13.129 13.129-2.607 0-5.032-.765-7.07-2.077.37.043.741.057 1.125.057 2.153 0 4.132-.722 5.714-1.947-2.017-.04-3.717-1.367-4.301-3.191.287.043.56.072.86.072.4 0 .8-.058 1.174-.158-2.107-.425-3.689-2.276-3.689-4.507v-.057c.613.344 1.332.563 2.091.59-1.247-.835-2.062-2.265-2.062-3.875 0-.86.227-1.647.628-2.332 2.276 2.793 5.686 4.62 9.526 4.82-.07-.345-.11-.69-.11-1.05 0-2.51 2.037-4.547 4.547-4.547 1.303 0 2.48.548 3.305 1.433 1.033-.2 2.007-.58 2.882-1.104-.34 1.058-1.058 1.948-1.99 2.511.923-.114 1.805-.354 2.62-.718-.616.922-1.39 1.732-2.275 2.384z" /></svg>} />
@@ -493,13 +489,13 @@ const Footer: React.FC = () => {
             </div>
           </div>
 
-          <FooterCol title="Platform" links={['Dashboard', 'Asset Explorer', 'Neural Models', 'API Gateway']} />
-          <FooterCol title="Company" links={['Our Vision', 'Engineering', 'Case Studies', 'Contact']} />
-          <FooterCol title="Legal" links={['Privacy Policy', 'Protocol Terms', 'SLA Agreement', 'Security']} />
+          <FooterCol title="Platform" links={['Digital Twin', 'Anomaly Detection', 'AI Assistant', 'Simulation Mode']} />
+          <FooterCol title="Industries" links={['Ammonia Synthesis', 'Process Optimization', 'Safety Monitoring', 'Predictive Maintenance']} />
+          <FooterCol title="Company" links={['Vision', 'Operations', 'Research', 'Contact']} />
         </div>
 
         <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="text-[10px] text-white/20 uppercase tracking-widest">© 2024 FORGE SYSTEMS INC. ALL RIGHTS RESERVED.</div>
+          <div className="text-[10px] text-white/20 uppercase tracking-widest">© 2024 NOVAOPS SYSTEMS INC. ALL RIGHTS RESERVED.</div>
           <div className="flex gap-8 text-[10px] text-white/40 font-mono uppercase">
             <span className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-success animate-pulse"></span> Network Up
