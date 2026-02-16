@@ -87,6 +87,8 @@ Add UI screenshots as they are captured:
 ## Architecture
 - [Solution architecture](Solution%20architecture.pdf)
 
+<embed src="Solution%20architecture.pdf" type="application/pdf" width="100%" height="600px" />
+
 ## Prerequisites
 ### Frontend
 - Node.js 18+ (recommended)
